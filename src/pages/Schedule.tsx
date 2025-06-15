@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
 import dayjs from 'dayjs';
@@ -11,6 +10,7 @@ import { Shift } from '@/lib/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { Pharmacist } from '@/lib/types';
 
 dayjs.locale('zh-tw');
 
@@ -237,17 +237,15 @@ const Schedule = () => {
 
                 let saturdayWarning = null;
                 if (isSaturday) {
-                    const earlySlot = TIME_SLOTS.find(slot => slot.name === '早班');
-                    let morningShiftPharmacistCount = 0;
-                    if (earlySlot) {
-                        const morningShifts = getShiftsForSlot(earlySlot);
-                        const morningShiftIds = morningShifts.map(s => s.id);
-                        morningShiftPharmacistCount = Object.keys(dailySchedule)
-                            .filter(shiftId => morningShiftIds.includes(shiftId) && dailySchedule[shiftId])
-                            .length;
-                    }
+                    const workingFullTimersCount = pharmacists.filter(p => p.position === '正職' && !isPharmacistOnLeave(p.id, dateStr)).length;
                     
-                    if (morningShiftPharmacistCount < 3) {
+                    const earlySlot = TIME_SLOTS.find(slot => slot.name === '早班');
+                    const morningShifts = earlySlot ? getShiftsForSlot(earlySlot) : [];
+
+                    const assignedPharmacistIds = morningShifts.map(s => dailySchedule[s.id]).filter(Boolean) as string[];
+                    const assignedPartTimersCount = pharmacists.filter(p => p.position === '兼職' && assignedPharmacistIds.includes(p.id)).length;
+
+                    if (workingFullTimersCount + assignedPartTimersCount < 3) {
                          saturdayWarning = (
                             <div className="flex items-center gap-1 text-xs text-destructive mt-1 font-normal">
                                 <TriangleAlert className="h-3 w-3" />
@@ -278,6 +276,63 @@ const Schedule = () => {
                       <TableCell colSpan={TIME_SLOTS.length} className="text-center text-muted-foreground font-semibold">
                         週日公休
                       </TableCell>
+                    ) : isSaturday ? (
+                      <>
+                        <TableCell className="align-top cursor-pointer hover:bg-muted/50 p-2" onClick={() => {
+                          const earlySlot = TIME_SLOTS.find(slot => slot.name === '早班');
+                          if (earlySlot) openAssignmentDialog(day, earlySlot);
+                        }}>
+                          <div className="flex flex-col gap-1 min-h-[60px]">
+                            {(() => {
+                              const workingFullTimers = pharmacists.filter(p => p.position === '正職' && !isPharmacistOnLeave(p.id, dateStr));
+                              const earlySlot = TIME_SLOTS.find(slot => slot.name === '早班');
+                              const morningShifts = earlySlot ? getShiftsForSlot(earlySlot) : [];
+
+                              const assignedPharmacists = morningShifts
+                                .map(shift => {
+                                    const pharmacistId = dailySchedule[shift.id];
+                                    if (!pharmacistId) return null;
+                                    return pharmacists.find(p => p.id === pharmacistId);
+                                })
+                                .filter((p): p is Pharmacist => !!p);
+                              
+                              const assignedPartTimers = assignedPharmacists.filter(p => p.position === '兼職');
+
+                              return (
+                                  <>
+                                      {workingFullTimers.map(p => (
+                                          <div key={p.id} className="text-xs p-1.5 rounded-md bg-background border">
+                                              <span className="font-semibold">{p.name}</span>
+                                              <span className="text-muted-foreground"> (正職)</span>
+                                          </div>
+                                      ))}
+                                      {assignedPartTimers.map(p => {
+                                          const hasLeaveConflict = isPharmacistOnLeave(p.id, dateStr);
+                                          return (
+                                              <div key={p.id} className={cn(
+                                                  "text-xs p-1.5 rounded-md border",
+                                                  hasLeaveConflict ? "border-destructive bg-destructive/10" : "bg-green-50 border-green-200"
+                                              )}>
+                                                  <span className="font-semibold text-green-900">{p.name}</span>
+                                                  <span className="text-green-800"> (兼職支援)</span>
+                                                  {hasLeaveConflict && <div className="text-destructive font-semibold mt-1">休假中</div>}
+                                              </div>
+                                          );
+                                      })}
+                                      {(workingFullTimers.length + assignedPartTimers.length) === 0 && (
+                                          <div className="text-xs text-muted-foreground flex items-center justify-center h-full">無人上班</div>
+                                      )}
+                                  </>
+                              );
+                            })()}
+                          </div>
+                        </TableCell>
+                        <TableCell colSpan={2} className="align-top p-2 bg-muted/40">
+                            <div className="flex flex-col gap-1 min-h-[60px] items-center justify-center text-muted-foreground text-sm">
+                                無此時段
+                            </div>
+                        </TableCell>
+                      </>
                     ) : (
                       TIME_SLOTS.map(slot => {
                         if (isSaturday && (slot.name === '午班' || slot.name === '晚班')) {
@@ -330,13 +385,21 @@ const Schedule = () => {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>指派 {selectedDay?.format('MM/DD')} {selectedSlot?.name}</DialogTitle>
+            <DialogTitle>
+              {selectedDay?.day() === 6 
+                ? `指派 ${selectedDay?.format('MM/DD')} 週六支援` 
+                : `指派 ${selectedDay?.format('MM/DD')} ${selectedSlot?.name}`
+              }
+            </DialogTitle>
           </DialogHeader>
           <div className="py-4 flex flex-col gap-4">
             {shiftsForSelectedSlot.length > 0 ? shiftsForSelectedSlot.map(shift => {
                const dateStr = selectedDay!.format('YYYY-MM-DD');
                const dailySchedule = schedule[dateStr] || {};
-               const availablePharmacists = pharmacists.filter(p => !isPharmacistOnLeave(p.id, dateStr));
+               const isSaturdayDialog = selectedDay?.day() === 6;
+               const availablePharmacists = isSaturdayDialog
+                ? pharmacists.filter(p => p.position === '兼職' && !isPharmacistOnLeave(p.id, dateStr))
+                : pharmacists.filter(p => !isPharmacistOnLeave(p.id, dateStr));
 
               return (
               <div key={shift.id} className="grid grid-cols-4 items-center gap-4">
@@ -347,13 +410,14 @@ const Schedule = () => {
                     onValueChange={(pharmacistId) => assignShift(dateStr, shift.id, pharmacistId)}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="指派藥師" />
+                      <SelectValue placeholder={isSaturdayDialog ? "指派兼職藥師支援" : "指派藥師"} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="unassign">取消指派</SelectItem>
                       {availablePharmacists.map(p => (
                         <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}
+                      {isSaturdayDialog && availablePharmacists.length === 0 && <div className="p-2 text-sm text-muted-foreground text-center">無可用的兼職藥師</div>}
                     </SelectContent>
                   </Select>
                 </div>
