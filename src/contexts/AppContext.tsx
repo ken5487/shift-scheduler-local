@@ -120,9 +120,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const assignShift = (date: string, shiftId: string, pharmacistId: string) => {
     setSchedule(prev => {
       const newSchedule = { ...prev };
+      
+      // Ensure the date entry and its shifts property exist
       if (!newSchedule[date]) {
         newSchedule[date] = { shifts: {} };
+      } else if (!newSchedule[date].shifts) {
+        newSchedule[date].shifts = {};
       }
+
       if (pharmacistId === "unassign") {
         delete newSchedule[date].shifts[shiftId];
       } else {
