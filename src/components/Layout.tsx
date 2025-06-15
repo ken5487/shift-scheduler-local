@@ -1,6 +1,6 @@
 
 import { NavLink, Outlet, Link, useLocation } from 'react-router-dom';
-import { Home, Calendar, Users, Clock, Syringe, CalendarOff, ClipboardPaste, ArrowLeft } from 'lucide-react';
+import { Home, Calendar, Users, Clock, Syringe, CalendarOff, ClipboardPaste, ArrowLeft, LifeBuoy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -13,6 +13,7 @@ const Layout = () => {
     { to: '/staff', label: '藥師管理', icon: Users },
     { to: '/shifts', label: '班型管理', icon: Clock },
     { to: '/leave', label: '休假管理', icon: CalendarOff },
+    { to: '/support', label: '支援設定', icon: LifeBuoy },
   ];
 
   return (

@@ -13,6 +13,7 @@ import Schedule from "./pages/Schedule";
 import { AppProvider } from "./contexts/AppContext";
 import Leave from "./pages/Leave";
 import WorkAssignment from "./pages/WorkAssignment";
+import Support from "./pages/Support";
 
 const queryClient = new QueryClient();
 
@@ -30,6 +31,7 @@ const App = () => (
               <Route path="/shifts" element={<Shifts />} />
               <Route path="/schedule" element={<Schedule />} />
               <Route path="/leave" element={<Leave />} />
+              <Route path="/support" element={<Support />} />
               <Route path="/work-assignment" element={<WorkAssignment />} />
             </Route>
             <Route path="*" element={<NotFound />} />

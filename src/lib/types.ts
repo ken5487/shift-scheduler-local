@@ -15,6 +15,10 @@ export interface Shift {
 
 export interface DailySchedule {
   [shiftId: string]: string | undefined; // pharmacistId
+  support?: {
+    morning?: (string | null)[];
+    afternoon?: (string | null)[];
+  };
 }
 
 export interface MonthlySchedule {
@@ -27,3 +31,8 @@ export interface Leave {
   date: string; // YYYY-MM-DD
 }
 
+export interface SupportNeed {
+  dayOfWeek: number; // 1-5 for Mon-Fri
+  timeSlot: 'morning' | 'afternoon';
+  count: number;
+}

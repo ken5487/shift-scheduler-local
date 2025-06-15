@@ -4,7 +4,7 @@ import dayjs from 'dayjs';
 import 'dayjs/locale/zh-tw';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ChevronLeft, ChevronRight, TriangleAlert, Download } from 'lucide-react';
+import { ChevronLeft, ChevronRight, TriangleAlert, Download, LifeBuoy } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Shift } from '@/lib/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -38,11 +38,13 @@ const doTimesOverlap = (shift: Shift, slot: { start: string; end: string }) => {
 
 
 const Schedule = () => {
-  const { shifts, pharmacists, schedule, assignShift, isPharmacistOnLeave } = useAppContext();
+  const { shifts, pharmacists, schedule, assignShift, isPharmacistOnLeave, supportNeeds, assignSupport } = useAppContext();
   const [currentDate, setCurrentDate] = useState(dayjs());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<dayjs.Dayjs | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<{ name: string; start: string; end: string; } | null>(null);
+  const [isSupportDialogOpen, setIsSupportDialogOpen] = useState(false);
+  const [selectedDayForSupport, setSelectedDayForSupport] = useState<dayjs.Dayjs | null>(null);
 
   const startOfMonth = currentDate.startOf('month');
   const endOfMonth = currentDate.endOf('month');
@@ -62,6 +64,11 @@ const Schedule = () => {
     setSelectedDay(day);
     setSelectedSlot(slot);
     setIsDialogOpen(true);
+  };
+  
+  const openSupportDialog = (day: dayjs.Dayjs) => {
+    setSelectedDayForSupport(day);
+    setIsSupportDialogOpen(true);
   };
   
   const shiftsForSelectedSlot = selectedSlot ? getShiftsForSlot(selectedSlot) : [];
@@ -173,6 +180,7 @@ const Schedule = () => {
                         <tr>
                             <th style="width: 100px;">日期</th>
                             ${TIME_SLOTS.map(slot => `<th>${slot.name} <br><span style="font-size: 12px; font-weight: normal; color: #71717a;">(${slot.start}-${slot.end})</span></th>`).join('')}
+                            <th style="width: 150px;">支援</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -225,6 +233,7 @@ const Schedule = () => {
                 {TIME_SLOTS.map(slot => (
                   <TableHead key={slot.name}>{slot.name} <span className="text-xs font-normal text-muted-foreground">({slot.start}-{slot.end})</span></TableHead>
                 ))}
+                <TableHead className="w-[150px]">支援</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -234,6 +243,8 @@ const Schedule = () => {
                 const pharmacistsOnLeaveToday = pharmacists.filter(p => isPharmacistOnLeave(p.id, dateStr));
                 const isSunday = day.day() === 0;
                 const isSaturday = day.day() === 6;
+                const dayOfWeek = day.day();
+                const canHaveSupport = !isSunday && !isSaturday;
 
                 let saturdayWarning = null;
                 if (isSaturday) {
@@ -273,15 +284,14 @@ const Schedule = () => {
                       </div>
                     </TableCell>
                     {isSunday ? (
-                      <TableCell colSpan={TIME_SLOTS.length} className="text-center text-muted-foreground font-semibold">
-                        週日公休
-                      </TableCell>
+                      <>
+                        <TableCell colSpan={TIME_SLOTS.length} className="text-center text-muted-foreground font-semibold">
+                          週日公休
+                        </TableCell>
+                      </>
                     ) : isSaturday ? (
                       <>
-                        <TableCell className="align-top cursor-pointer hover:bg-muted/50 p-2" onClick={() => {
-                          const earlySlot = TIME_SLOTS.find(slot => slot.name === '早班');
-                          if (earlySlot) openAssignmentDialog(day, earlySlot);
-                        }}>
+                        <TableCell className="align-top p-2">
                           <div className="flex flex-col gap-1 min-h-[60px]">
                             {(() => {
                               const workingFullTimers = pharmacists.filter(p => p.position === '正職' && !isPharmacistOnLeave(p.id, dateStr));
@@ -374,6 +384,57 @@ const Schedule = () => {
                         )
                       })
                     )}
+                    <TableCell className="align-top p-2">
+                        {canHaveSupport ? (
+                            <div 
+                                className="flex flex-col gap-1 min-h-[60px] cursor-pointer hover:bg-blue-50 p-1 rounded-md"
+                                onClick={() => openSupportDialog(day)}
+                            >
+                                <div className="font-semibold text-xs flex items-center gap-1 text-blue-700">
+                                    <LifeBuoy className="h-4 w-4" />
+                                    <span>支援人力</span>
+                                </div>
+                                
+                                {(() => {
+                                    const supportAssignments = dailySchedule.support;
+                                    if (!supportAssignments || (supportAssignments.morning?.length === 0 && supportAssignments.afternoon?.length === 0)) {
+                                       const morningNeed = supportNeeds.find(n => n.dayOfWeek === dayOfWeek && n.timeSlot === 'morning')?.count || 0;
+                                       const afternoonNeed = supportNeeds.find(n => n.dayOfWeek === dayOfWeek && n.timeSlot === 'afternoon')?.count || 0;
+                                       if(morningNeed === 0 && afternoonNeed === 0) {
+                                        return <div className="text-xs text-muted-foreground text-center pt-2">無支援需求</div>
+                                       }
+                                    }
+
+                                    const morningSupport = supportAssignments?.morning?.filter(Boolean) || [];
+                                    const afternoonSupport = supportAssignments?.afternoon?.filter(Boolean) || [];
+                                    const findPharmacist = (id: string) => pharmacists.find(p => p.id === id);
+
+                                    if (morningSupport.length === 0 && afternoonSupport.length === 0) {
+                                        return <div className="text-xs text-muted-foreground text-center pt-2">點擊指派</div>;
+                                    }
+
+                                    return (
+                                        <>
+                                            {morningSupport.length > 0 && (
+                                                <div className="text-xs mt-1">
+                                                    <span className="font-medium">上午: </span>
+                                                    {morningSupport.map(pId => findPharmacist(pId)?.name).join(', ')}
+                                                </div>
+                                            )}
+                                            {afternoonSupport.length > 0 && (
+                                                <div className="text-xs">
+                                                    <span className="font-medium">下午: </span>
+                                                    {afternoonSupport.map(pId => findPharmacist(pId)?.name).join(', ')}
+                                                </div>
+                                            )}
+                                        </>
+                                    );
+                                })()}
+                            </div>
+                        ) : (
+                            <div className="flex items-center justify-center text-muted-foreground text-xs h-full">不適用</div>
+                        )}
+                    </TableCell>
                   </TableRow>
                 )
               })}
@@ -423,6 +484,70 @@ const Schedule = () => {
                 </div>
               </div>
             )}) : <p className="text-center text-muted-foreground">此時段沒有可以指派的班型。</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      <Dialog open={isSupportDialogOpen} onOpenChange={setIsSupportDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+               指派 {selectedDayForSupport?.format('MM/DD (ddd)')} 支援人力
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 flex flex-col gap-6">
+            {selectedDayForSupport && (
+                <>
+                    {(['morning', 'afternoon'] as const).map(timeSlot => {
+                        const dayOfWeek = selectedDayForSupport.day();
+                        const need = supportNeeds.find(n => n.dayOfWeek === dayOfWeek && n.timeSlot === timeSlot);
+                        if (!need || need.count === 0) return null;
+
+                        const dateStr = selectedDayForSupport.format('YYYY-MM-DD');
+                        const supportAssignments = schedule[dateStr]?.support?.[timeSlot] || [];
+                        const allSupportAssignmentsForDay = [
+                            ...(schedule[dateStr]?.support?.morning || []),
+                            ...(schedule[dateStr]?.support?.afternoon || [])
+                        ];
+                        const availablePharmacists = pharmacists.filter(p => !isPharmacistOnLeave(p.id, dateStr));
+
+                        return (
+                            <div key={timeSlot}>
+                                <h3 className="font-semibold mb-3 border-b pb-2">{timeSlot === 'morning' ? '上午支援' : '下午支援'} ({need.count}人)</h3>
+                                <div className="flex flex-col gap-3">
+                                    {Array.from({ length: need.count }).map((_, index) => (
+                                        <div key={index} className="grid grid-cols-4 items-center gap-4">
+                                            <span className="text-right text-sm text-muted-foreground">支援 {index + 1}</span>
+                                            <div className="col-span-3">
+                                                 <Select
+                                                    value={supportAssignments[index] || 'unassign'}
+                                                    onValueChange={(pharmacistId) => assignSupport(dateStr, timeSlot, pharmacistId, index)}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="指派藥師" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="unassign">取消指派</SelectItem>
+                                                        {availablePharmacists.map(p => {
+                                                            const currentSlotAssignments = supportAssignments || [];
+                                                            const isAssignedInThisSlot = currentSlotAssignments.some((pId, i) => pId === p.id && i !== index);
+                                                            return (
+                                                                <SelectItem key={p.id} value={p.id} disabled={isAssignedInThisSlot}>
+                                                                    {p.name} {isAssignedInThisSlot ? '(已於此時段指派)' : ''}
+                                                                </SelectItem>
+                                                            );
+                                                        })}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
