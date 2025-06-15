@@ -1,4 +1,3 @@
-
 import { useAppContext } from '@/contexts/AppContext';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Users, Clock } from 'lucide-react';
@@ -37,7 +36,7 @@ const Index = () => {
         <CardHeader>
           <CardTitle>快速開始</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col sm:flex-row gap-4">
+        <CardContent className="flex flex-wrap gap-4">
           <Button asChild>
             <Link to="/schedule">前往排班</Link>
           </Button>
@@ -47,6 +46,12 @@ const Index = () => {
            <Button asChild variant="outline">
             <Link to="/shifts">管理班型</Link>
           </Button>
+           <Button asChild variant="outline">
+            <Link to="/leave">休假管理</Link>
+          </Button>
+           <Button asChild variant="outline">
+            <Link to="/work-assignment">批次分配</Link>
+          </Button>
         </CardContent>
       </Card>
     </div>
@@ -54,4 +59,3 @@ const Index = () => {
 };
 
 export default Index;
-
