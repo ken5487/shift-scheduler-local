@@ -81,7 +81,7 @@ const Schedule = () => {
         }
         
         TIME_SLOTS.forEach(slot => {
-            if (day.day() === 6 && slot.name === '晚班') return;
+            if (day.day() === 6 && (slot.name === '午班' || slot.name === '晚班')) return;
 
             const relevantShifts = getShiftsForSlot(slot);
             if (relevantShifts.length === 0) {
@@ -130,8 +130,8 @@ const Schedule = () => {
             cells = `<td colspan="${TIME_SLOTS.length}" style="text-align: center; color: #71717a; background-color: #f3f4f6;">週日公休</td>`;
         } else {
             cells = TIME_SLOTS.map(slot => {
-                if (isSaturday && slot.name === '晚班') {
-                    return `<td style="background-color: #f5f5f5; text-align: center; color: #71717a;">無夜班</td>`;
+                if (isSaturday && (slot.name === '午班' || slot.name === '晚班')) {
+                    return `<td style="background-color: #f5f5f5; text-align: center; color: #71717a;">無此時段</td>`;
                 }
                 const relevantShifts = getShiftsForSlot(slot);
                 const shiftContent = relevantShifts.map(shift => {
@@ -237,12 +237,21 @@ const Schedule = () => {
 
                 let saturdayWarning = null;
                 if (isSaturday) {
-                    const assignedCount = Object.values(dailySchedule).filter(Boolean).length;
-                    if (assignedCount < 3) {
-                        saturdayWarning = (
+                    const earlySlot = TIME_SLOTS.find(slot => slot.name === '早班');
+                    let morningShiftPharmacistCount = 0;
+                    if (earlySlot) {
+                        const morningShifts = getShiftsForSlot(earlySlot);
+                        const morningShiftIds = morningShifts.map(s => s.id);
+                        morningShiftPharmacistCount = Object.keys(dailySchedule)
+                            .filter(shiftId => morningShiftIds.includes(shiftId) && dailySchedule[shiftId])
+                            .length;
+                    }
+                    
+                    if (morningShiftPharmacistCount < 3) {
+                         saturdayWarning = (
                             <div className="flex items-center gap-1 text-xs text-destructive mt-1 font-normal">
                                 <TriangleAlert className="h-3 w-3" />
-                                <span>排班人數不足 (應為3人)</span>
+                                <span>早班人數不足 (應為3人)</span>
                             </div>
                         );
                     }
@@ -271,11 +280,11 @@ const Schedule = () => {
                       </TableCell>
                     ) : (
                       TIME_SLOTS.map(slot => {
-                        if (isSaturday && slot.name === '晚班') {
+                        if (isSaturday && (slot.name === '午班' || slot.name === '晚班')) {
                           return (
                             <TableCell key={slot.name} className="align-top p-2 bg-muted/40">
                               <div className="flex flex-col gap-1 min-h-[60px] items-center justify-center text-muted-foreground text-sm">
-                                無夜班
+                                無此時段
                               </div>
                             </TableCell>
                           );
