@@ -1,4 +1,3 @@
-
 export interface Pharmacist {
   id: string;
   name: string;
@@ -15,14 +14,16 @@ export interface Shift {
 
 export interface DailySchedule {
   [shiftId: string]: string | undefined; // pharmacistId
-  support?: {
-    morning?: (string | null)[];
-    afternoon?: (string | null)[];
-  };
 }
 
 export interface MonthlySchedule {
-  [day: string]: DailySchedule; // day is YYYY-MM-DD
+  [day: string]: { // day is YYYY-MM-DD
+    shifts: DailySchedule;
+    support?: {
+      morning?: (string | null)[];
+      afternoon?: (string | null)[];
+    };
+  }
 }
 
 export interface Leave {

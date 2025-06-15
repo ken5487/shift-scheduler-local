@@ -1,8 +1,8 @@
 
 import { useAppContext } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const WEEKDAYS = ["一", "二", "三", "四", "五"];
 
@@ -48,13 +48,19 @@ const Support = () => {
                                         const dayOfWeek = index + 1;
                                         return (
                                             <TableCell key={dayOfWeek} className="text-center">
-                                                <Input
-                                                    type="number"
-                                                    min="0"
-                                                    className="mx-auto w-20 text-center"
-                                                    value={getNeed(dayOfWeek, 'morning')}
-                                                    onChange={(e) => handleCountChange(dayOfWeek, 'morning', e.target.value)}
-                                                />
+                                                <Select
+                                                    value={String(getNeed(dayOfWeek, 'morning'))}
+                                                    onValueChange={(value) => handleCountChange(dayOfWeek, 'morning', value)}
+                                                >
+                                                    <SelectTrigger className="mx-auto w-28">
+                                                        <SelectValue placeholder="選擇數量" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {Array.from({ length: 6 }, (_, i) => i).map(num => (
+                                                            <SelectItem key={num} value={String(num)}>{num} 人</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
                                             </TableCell>
                                         );
                                     })}
@@ -65,13 +71,19 @@ const Support = () => {
                                         const dayOfWeek = index + 1;
                                         return (
                                             <TableCell key={dayOfWeek} className="text-center">
-                                                <Input
-                                                    type="number"
-                                                    min="0"
-                                                    className="mx-auto w-20 text-center"
-                                                    value={getNeed(dayOfWeek, 'afternoon')}
-                                                    onChange={(e) => handleCountChange(dayOfWeek, 'afternoon', e.target.value)}
-                                                />
+                                                <Select
+                                                    value={String(getNeed(dayOfWeek, 'afternoon'))}
+                                                    onValueChange={(value) => handleCountChange(dayOfWeek, 'afternoon', value)}
+                                                >
+                                                    <SelectTrigger className="mx-auto w-28">
+                                                        <SelectValue placeholder="選擇數量" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {Array.from({ length: 6 }, (_, i) => i).map(num => (
+                                                            <SelectItem key={num} value={String(num)}>{num} 人</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
                                             </TableCell>
                                         );
                                     })}

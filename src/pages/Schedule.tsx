@@ -81,9 +81,9 @@ const Schedule = () => {
     daysInMonth.forEach(day => {
         const dateStr = day.format('YYYY-MM-DD');
         const dayOfWeek = day.format('ddd');
-        const dailySchedule = schedule[dateStr] || {};
+        const dailySchedule = schedule[dateStr] || { shifts: {} };
         
-        if (day.day() === 0) {
+        if (day.day() === 0 || !dailySchedule) {
             return;
         }
         
@@ -95,7 +95,7 @@ const Schedule = () => {
                  csvRows.push([dateStr, dayOfWeek, slot.name, '無適用班型', '']);
             } else {
                 relevantShifts.forEach(shift => {
-                    const pharmacistId = dailySchedule[shift.id];
+                    const pharmacistId = dailySchedule.shifts[shift.id];
                     const pharmacistName = pharmacistId ? pharmacistMap.get(pharmacistId) || '未知藥師' : '未指派';
                     csvRows.push([
                         dateStr,
@@ -128,21 +128,24 @@ const Schedule = () => {
     
     const tableRows = daysInMonth.map(day => {
         const dateStr = day.format('YYYY-MM-DD');
-        const dailySchedule = schedule[dateStr] || {};
+        const dailySchedule = schedule[dateStr] || { shifts: {} };
         const isSunday = day.day() === 0;
         const isSaturday = day.day() === 6;
 
         let cells = '';
         if (isSunday) {
             cells = `<td colspan="${TIME_SLOTS.length}" style="text-align: center; color: #71717a; background-color: #f3f4f6;">週日公休</td>`;
-        } else {
+        } else if (!dailySchedule) {
+            cells = `<td colspan="${TIME_SLOTS.length + 1}" style="text-align: center; color: #71717a;">未排班</td>`;
+        }
+        else {
             cells = TIME_SLOTS.map(slot => {
                 if (isSaturday && (slot.name === '午班' || slot.name === '晚班')) {
                     return `<td style="background-color: #f5f5f5; text-align: center; color: #71717a;">無此時段</td>`;
                 }
                 const relevantShifts = getShiftsForSlot(slot);
                 const shiftContent = relevantShifts.map(shift => {
-                    const pharmacistId = dailySchedule[shift.id];
+                    const pharmacistId = dailySchedule.shifts[shift.id];
                     const pharmacistName = pharmacistId ? pharmacistMap.get(pharmacistId) : '未指派';
                     return `<div style="border: 1px solid #e5e7eb; border-radius: 0.375rem; padding: 4px; margin-bottom: 4px; background-color: #ffffff;">
                                 <strong style="font-weight: 600;">${shift.name}:</strong> ${pharmacistName}
@@ -239,7 +242,7 @@ const Schedule = () => {
             <TableBody>
               {daysInMonth.map(day => {
                 const dateStr = day.format('YYYY-MM-DD');
-                const dailySchedule = schedule[dateStr] || {};
+                const dailySchedule = schedule[dateStr] || { shifts: {} };
                 const pharmacistsOnLeaveToday = pharmacists.filter(p => isPharmacistOnLeave(p.id, dateStr));
                 const isSunday = day.day() === 0;
                 const isSaturday = day.day() === 6;
@@ -253,7 +256,7 @@ const Schedule = () => {
                     const earlySlot = TIME_SLOTS.find(slot => slot.name === '早班');
                     const morningShifts = earlySlot ? getShiftsForSlot(earlySlot) : [];
 
-                    const assignedPharmacistIds = morningShifts.map(s => dailySchedule[s.id]).filter(Boolean) as string[];
+                    const assignedPharmacistIds = morningShifts.map(s => dailySchedule.shifts[s.id]).filter(Boolean) as string[];
                     const assignedPartTimersCount = pharmacists.filter(p => p.position === '兼職' && assignedPharmacistIds.includes(p.id)).length;
 
                     if (workingFullTimersCount + assignedPartTimersCount < 3) {
@@ -300,7 +303,7 @@ const Schedule = () => {
 
                               const assignedPharmacists = morningShifts
                                 .map(shift => {
-                                    const pharmacistId = dailySchedule[shift.id];
+                                    const pharmacistId = dailySchedule.shifts[shift.id];
                                     if (!pharmacistId) return null;
                                     return pharmacists.find(p => p.id === pharmacistId);
                                 })
@@ -359,7 +362,7 @@ const Schedule = () => {
                           <TableCell key={slot.name} className="align-top cursor-pointer hover:bg-muted/50 p-2" onClick={() => openAssignmentDialog(day, slot)}>
                             <div className="flex flex-col gap-1 min-h-[60px]">
                               {relevantShifts.length > 0 ? relevantShifts.map(shift => {
-                                  const pharmacistId = dailySchedule[shift.id];
+                                  const pharmacistId = dailySchedule.shifts[shift.id];
                                   const pharmacist = pharmacists.find(p => p.id === pharmacistId);
                                   const hasLeaveConflict = !!pharmacistId && isPharmacistOnLeave(pharmacistId, dateStr);
 
@@ -397,7 +400,7 @@ const Schedule = () => {
                                 
                                 {(() => {
                                     const supportAssignments = dailySchedule.support;
-                                    if (!supportAssignments || (supportAssignments.morning?.length === 0 && supportAssignments.afternoon?.length === 0)) {
+                                    if (!supportAssignments || (supportAssignments.morning?.filter(Boolean).length === 0 && supportAssignments.afternoon?.filter(Boolean).length === 0)) {
                                        const morningNeed = supportNeeds.find(n => n.dayOfWeek === dayOfWeek && n.timeSlot === 'morning')?.count || 0;
                                        const afternoonNeed = supportNeeds.find(n => n.dayOfWeek === dayOfWeek && n.timeSlot === 'afternoon')?.count || 0;
                                        if(morningNeed === 0 && afternoonNeed === 0) {
@@ -456,7 +459,7 @@ const Schedule = () => {
           <div className="py-4 flex flex-col gap-4">
             {shiftsForSelectedSlot.length > 0 ? shiftsForSelectedSlot.map(shift => {
                const dateStr = selectedDay!.format('YYYY-MM-DD');
-               const dailySchedule = schedule[dateStr] || {};
+               const dailySchedule = schedule[dateStr] || { shifts: {} };
                const isSaturdayDialog = selectedDay?.day() === 6;
                const availablePharmacists = isSaturdayDialog
                 ? pharmacists.filter(p => p.position === '兼職' && !isPharmacistOnLeave(p.id, dateStr))
@@ -467,7 +470,7 @@ const Schedule = () => {
                 <span className="text-right font-medium">{shift.name}</span>
                 <div className="col-span-3">
                   <Select
-                    value={dailySchedule[shift.id]}
+                    value={dailySchedule.shifts[shift.id]}
                     onValueChange={(pharmacistId) => assignShift(dateStr, shift.id, pharmacistId)}
                   >
                     <SelectTrigger>
@@ -499,16 +502,12 @@ const Schedule = () => {
             {selectedDayForSupport && (
                 <>
                     {(['morning', 'afternoon'] as const).map(timeSlot => {
-                        const dayOfWeek = selectedDayForSupport.day();
+                        const dayOfWeek = selectedDayForSupport.day() === 0 ? 7 : selectedDayForSupport.day();
                         const need = supportNeeds.find(n => n.dayOfWeek === dayOfWeek && n.timeSlot === timeSlot);
                         if (!need || need.count === 0) return null;
 
                         const dateStr = selectedDayForSupport.format('YYYY-MM-DD');
                         const supportAssignments = schedule[dateStr]?.support?.[timeSlot] || [];
-                        const allSupportAssignmentsForDay = [
-                            ...(schedule[dateStr]?.support?.morning || []),
-                            ...(schedule[dateStr]?.support?.afternoon || [])
-                        ];
                         const availablePharmacists = pharmacists.filter(p => !isPharmacistOnLeave(p.id, dateStr));
 
                         return (

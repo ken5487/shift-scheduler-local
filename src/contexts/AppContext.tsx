@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Pharmacist, Shift, MonthlySchedule, Leave, SupportNeed, DailySchedule } from '@/lib/types';
+import { Pharmacist, Shift, MonthlySchedule, Leave, SupportNeed } from '@/lib/types';
 import dayjs from 'dayjs';
 
 // --- 預設範例資料 ---
@@ -32,7 +32,7 @@ interface AppContextType {
   deletePharmacist: (id: string) => void;
   shifts: Shift[];
   addShift: (shift: Omit<Shift, 'id' | 'saturdayLeaveLimit'> & { saturdayLeaveLimit: number }) => void;
-  updateShift: (shift: Shift) => void;
+  updateShift: (shift: Partial<Shift> & { id: string }) => void;
   deleteShift: (id: string) => void;
   schedule: MonthlySchedule;
   setSchedule: React.Dispatch<React.SetStateAction<MonthlySchedule>>;
@@ -109,8 +109,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setShifts([...shifts, { ...shift, id: uuidv4() }]);
   };
 
-  const updateShift = (updatedShift: Shift) => {
-    setShifts(shifts.map(s => s.id === updatedShift.id ? updatedShift : s));
+  const updateShift = (updatedShift: Partial<Shift> & { id: string }) => {
+    setShifts(shifts.map(s => s.id === updatedShift.id ? { ...s, ...updatedShift } : s));
   };
 
   const deleteShift = (id: string) => {
@@ -121,12 +121,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setSchedule(prev => {
       const newSchedule = { ...prev };
       if (!newSchedule[date]) {
-        newSchedule[date] = {};
+        newSchedule[date] = { shifts: {} };
       }
       if (pharmacistId === "unassign") {
-        delete newSchedule[date][shiftId];
+        delete newSchedule[date].shifts[shiftId];
       } else {
-        newSchedule[date][shiftId] = pharmacistId;
+        newSchedule[date].shifts[shiftId] = pharmacistId;
       }
       return newSchedule;
     });
@@ -140,10 +140,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const assignSupport = (date: string, timeSlot: 'morning' | 'afternoon', pharmacistId: string, index: number) => {
     setSchedule(prev => {
         const newSchedule = JSON.parse(JSON.stringify(prev));
-        const daySchedule: DailySchedule = newSchedule[date] || {};
-
-        if (!daySchedule.support) daySchedule.support = {};
-        if (!daySchedule.support[timeSlot]) daySchedule.support[timeSlot] = [];
+        const daySchedule = newSchedule[date] || { shifts: {} };
 
         // When assigning, clear conflicting shifts for the newly assigned pharmacist
         if (pharmacistId && pharmacistId !== 'unassign') {
@@ -153,15 +150,18 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             shifts.forEach(shift => {
               const shiftStart = toMinutes(shift.startTime);
               const shiftEnd = toMinutes(shift.endTime);
-              const effectiveShiftEnd = shiftEnd === 0 ? 24 * 60 : shiftEnd;
+              const shiftCenter = shiftStart + (shiftEnd - shiftStart) / 2;
 
-              const overlaps = shiftStart < supportEndTime && effectiveShiftEnd > supportStartTime;
+              const isShiftInSupportSlot = shiftCenter >= supportStartTime && shiftCenter < supportEndTime;
 
-              if (overlaps && daySchedule[shift.id] === pharmacistId) {
-                delete daySchedule[shift.id];
+              if (isShiftInSupportSlot && daySchedule.shifts[shift.id] === pharmacistId) {
+                delete daySchedule.shifts[shift.id];
               }
             });
         }
+        
+        if (!daySchedule.support) daySchedule.support = {};
+        if (!daySchedule.support[timeSlot]) daySchedule.support[timeSlot] = [];
         
         // Update the assignment array, using null for empty slots
         daySchedule.support[timeSlot]![index] = pharmacistId === 'unassign' ? null : pharmacistId;
@@ -193,7 +193,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         const newSchedule = JSON.parse(JSON.stringify(prevSchedule));
         Object.keys(newSchedule).forEach(dateStr => {
             const day = dayjs(dateStr);
-            if (day.day() === dayOfWeek) {
+            const dayNum = day.day() === 0 ? 7 : day.day(); // Use 1-7 for Mon-Sun
+            
+            if (dayNum === dayOfWeek) {
                 const daySchedule = newSchedule[dateStr];
                 if (daySchedule.support?.[timeSlot]?.length > count) {
                     daySchedule.support[timeSlot].length = count;

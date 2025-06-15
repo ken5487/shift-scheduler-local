@@ -1,3 +1,4 @@
+
 import { useAppContext } from '@/contexts/AppContext';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Users, Clock } from 'lucide-react';
@@ -51,6 +52,9 @@ const Index = () => {
           </Button>
            <Button asChild variant="outline">
             <Link to="/work-assignment">批次分配</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/support">支援設定</Link>
           </Button>
         </CardContent>
       </Card>
