@@ -1,12 +1,13 @@
 
 import { NavLink, Outlet } from 'react-router-dom';
-import { Home, Calendar, Users, Clock, Syringe, CalendarOff } from 'lucide-react';
+import { Home, Calendar, Users, Clock, Syringe, CalendarOff, ClipboardPaste } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Layout = () => {
   const navItems = [
     { to: '/', label: '儀表板', icon: Home },
     { to: '/schedule', label: '排班表', icon: Calendar },
+    { to: '/work-assignment', label: '批次分配', icon: ClipboardPaste },
     { to: '/staff', label: '藥師管理', icon: Users },
     { to: '/shifts', label: '班型管理', icon: Clock },
     { to: '/leave', label: '休假管理', icon: CalendarOff },

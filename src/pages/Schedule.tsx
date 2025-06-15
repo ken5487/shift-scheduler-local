@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
 import dayjs from 'dayjs';
@@ -94,11 +93,21 @@ const Schedule = () => {
               {daysInMonth.map(day => {
                 const dateStr = day.format('YYYY-MM-DD');
                 const dailySchedule = schedule[dateStr] || {};
+                const pharmacistsOnLeaveToday = pharmacists.filter(p => isPharmacistOnLeave(p.id, dateStr));
                 
                 return (
                   <TableRow key={dateStr}>
-                    <TableCell className="font-medium">
-                      {day.format('MM/DD')} ({day.format('ddd')})
+                    <TableCell className="font-medium align-top">
+                      <div className="flex flex-col">
+                        <span>{day.format('MM/DD')} ({day.format('ddd')})</span>
+                        <div className="mt-1 space-y-1">
+                          {pharmacistsOnLeaveToday.map(p => (
+                            <div key={p.id} className="text-xs text-destructive-foreground bg-destructive/80 px-2 py-0.5 rounded-full w-fit">
+                              {p.name} 休假
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </TableCell>
                     {TIME_SLOTS.map(slot => {
                       const relevantShifts = getShiftsForSlot(slot);

@@ -115,7 +115,31 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const addLeave = (pharmacistId: string, date: string) => {
     if (leave.some(l => l.pharmacistId === pharmacistId && l.date === date)) return;
-    setLeave([...leave, { id: uuidv4(), pharmacistId, date }]);
+    setLeave(prevLeave => [...prevLeave, { id: uuidv4(), pharmacistId, date }]);
+
+    // Un-assign any shifts for this pharmacist on this date
+    setSchedule(prevSchedule => {
+      const newSchedule = { ...prevSchedule };
+      if (newSchedule[date]) {
+        const dailySchedule = { ...newSchedule[date] };
+        let changed = false;
+        Object.keys(dailySchedule).forEach(shiftId => {
+          if (dailySchedule[shiftId] === pharmacistId) {
+            delete dailySchedule[shiftId];
+            changed = true;
+          }
+        });
+
+        if (changed) {
+          if (Object.keys(dailySchedule).length === 0) {
+            delete newSchedule[date];
+          } else {
+            newSchedule[date] = dailySchedule;
+          }
+        }
+      }
+      return newSchedule;
+    });
   };
 
   const deleteLeave = (pharmacistId: string, date: string) => {
