@@ -52,7 +52,9 @@ const Layout = () => {
             </Button>
           </div>
         )}
-        <Outlet />
+        <div key={location.pathname} className="animate-fade-in">
+          <Outlet />
+        </div>
       </main>
     </div>
   );
