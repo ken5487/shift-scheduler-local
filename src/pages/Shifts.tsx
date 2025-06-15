@@ -20,7 +20,12 @@ const Shifts = () => {
   const openDialog = (shift: Shift | null = null) => {
     setCurrentShift(shift);
     if (shift) {
-      setFormData(shift);
+      setFormData({
+        name: shift.name,
+        startTime: shift.startTime,
+        endTime: shift.endTime,
+        saturdayLeaveLimit: shift.saturdayLeaveLimit,
+      });
     } else {
       setFormData({ name: '', startTime: '08:00', endTime: '16:00', saturdayLeaveLimit: 1 });
     }
@@ -34,14 +39,19 @@ const Shifts = () => {
     }
     const limit = Number(formData.saturdayLeaveLimit);
     if (isNaN(limit) || limit < 0) {
-      toast.error('請輸入有效的週六休假天數 (必須大於或等於 0)');
+      toast.error('請輸入有效的週六可休天數 (必須大於或等於 0)');
       return;
     }
 
-    const shiftData = { ...formData, saturdayLeaveLimit: limit };
+    const shiftData = {
+      name: formData.name,
+      startTime: formData.startTime,
+      endTime: formData.endTime,
+      saturdayLeaveLimit: limit
+    };
 
     if (currentShift) {
-      updateShift(shiftData);
+      updateShift({ ...shiftData, id: currentShift.id });
       toast.success('班型已更新');
     } else {
       addShift(shiftData);
