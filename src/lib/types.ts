@@ -24,3 +24,8 @@ export interface Leave {
   pharmacistId: string;
   date: string; // YYYY-MM-DD
 }
+
+export interface SaturdayLeaveLimits {
+  regular: number;
+  night: number;
+}

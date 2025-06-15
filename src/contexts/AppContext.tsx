@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Pharmacist, Shift, MonthlySchedule, Leave } from '@/lib/types';
+import { Pharmacist, Shift, MonthlySchedule, Leave, SaturdayLeaveLimits } from '@/lib/types';
 import dayjs from 'dayjs';
 
 // --- 預設範例資料 ---
@@ -33,6 +33,8 @@ interface AppContextType {
   addLeave: (pharmacistId: string, date: string) => void;
   deleteLeave: (pharmacistId: string, date: string) => void;
   isPharmacistOnLeave: (pharmacistId: string, date: string) => boolean;
+  saturdayLeaveLimits: SaturdayLeaveLimits;
+  updateSaturdayLeaveLimits: (limits: SaturdayLeaveLimits) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -42,6 +44,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [schedule, setSchedule] = useState<MonthlySchedule>({});
   const [leave, setLeave] = useState<Leave[]>([]);
+  const [saturdayLeaveLimits, setSaturdayLeaveLimits] = useState<SaturdayLeaveLimits>({ regular: 1, night: 2 });
 
   useEffect(() => {
     try {
@@ -49,17 +52,20 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       const savedShifts = localStorage.getItem('shifts');
       const savedSchedule = localStorage.getItem('schedule');
       const savedLeave = localStorage.getItem('leave');
+      const savedLimits = localStorage.getItem('saturdayLeaveLimits');
 
       setPharmacists(savedPharmacists ? JSON.parse(savedPharmacists) : defaultPharmacists);
       setShifts(savedShifts ? JSON.parse(savedShifts) : defaultShifts);
       setSchedule(savedSchedule ? JSON.parse(savedSchedule) : {});
       setLeave(savedLeave ? JSON.parse(savedLeave) : []);
+      setSaturdayLeaveLimits(savedLimits ? JSON.parse(savedLimits) : { regular: 1, night: 2 });
     } catch (error) {
       console.error("Failed to load data from localStorage", error);
       setPharmacists(defaultPharmacists);
       setShifts(defaultShifts);
       setSchedule({});
       setLeave([]);
+      setSaturdayLeaveLimits({ regular: 1, night: 2 });
     }
   }, []);
 
@@ -69,10 +75,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         localStorage.setItem('shifts', JSON.stringify(shifts));
         localStorage.setItem('schedule', JSON.stringify(schedule));
         localStorage.setItem('leave', JSON.stringify(leave));
+        localStorage.setItem('saturdayLeaveLimits', JSON.stringify(saturdayLeaveLimits));
     } catch (error) {
         console.error("Failed to save data to localStorage", error);
     }
-  }, [pharmacists, shifts, schedule, leave]);
+  }, [pharmacists, shifts, schedule, leave, saturdayLeaveLimits]);
 
   const addPharmacist = (pharmacist: Omit<Pharmacist, 'id'>) => {
     setPharmacists([...pharmacists, { ...pharmacist, id: uuidv4() }]);
@@ -128,12 +135,17 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     return leave.some(l => l.pharmacistId === pharmacistId && l.date === date);
   };
 
+  const updateSaturdayLeaveLimits = (limits: SaturdayLeaveLimits) => {
+    setSaturdayLeaveLimits(limits);
+  };
+
   return (
     <AppContext.Provider value={{ 
       pharmacists, addPharmacist, updatePharmacist, deletePharmacist,
       shifts, addShift, updateShift, deleteShift,
       schedule, setSchedule, assignShift,
-      leave, addLeave, deleteLeave, isPharmacistOnLeave
+      leave, addLeave, deleteLeave, isPharmacistOnLeave,
+      saturdayLeaveLimits, updateSaturdayLeaveLimits
     }}>
       {children}
     </AppContext.Provider>

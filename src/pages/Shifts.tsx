@@ -1,14 +1,77 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Shift } from '@/lib/types';
 import { PlusCircle, Edit, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+
+const SaturdayLeaveSettingsCard = () => {
+  const { saturdayLeaveLimits, updateSaturdayLeaveLimits } = useAppContext();
+  const [limits, setLimits] = useState(saturdayLeaveLimits);
+
+  useEffect(() => {
+    setLimits(saturdayLeaveLimits);
+  }, [saturdayLeaveLimits]);
+
+  const handleSave = () => {
+    const regularLimit = Number(limits.regular);
+    const nightLimit = Number(limits.night);
+
+    if (isNaN(regularLimit) || isNaN(nightLimit) || regularLimit < 0 || nightLimit < 0) {
+      toast.error('請輸入有效的數字 (必須大於或等於 0)');
+      return;
+    }
+
+    updateSaturdayLeaveLimits({
+      regular: regularLimit,
+      night: nightLimit,
+    });
+    toast.success('週六休假設定已儲存');
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>週六休假上限設定</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="regular-limit">一般藥師 (每月可排休週六天數)</Label>
+            <Input
+              id="regular-limit"
+              type="number"
+              value={limits.regular}
+              onChange={(e) => setLimits(prev => ({ ...prev, regular: Number(e.target.value) }))}
+              min="0"
+              placeholder="例如: 1"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="night-limit">有夜班藥師 (每月可排休週六天數)</Label>
+            <Input
+              id="night-limit"
+              type="number"
+              value={limits.night}
+              onChange={(e) => setLimits(prev => ({ ...prev, night: Number(e.target.value) }))}
+              min="0"
+              placeholder="例如: 2"
+            />
+          </div>
+        </div>
+        <div className="mt-6 flex justify-end">
+          <Button onClick={handleSave}>儲存設定</Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 const Shifts = () => {
   const { shifts, addShift, updateShift, deleteShift } = useAppContext();
@@ -33,7 +96,7 @@ const Shifts = () => {
   };
 
   return (
-    <>
+    <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">班型管理</h1>
         <Button onClick={() => openDialog()}>
@@ -73,6 +136,8 @@ const Shifts = () => {
         </CardContent>
       </Card>
       
+      <SaturdayLeaveSettingsCard />
+      
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -98,7 +163,7 @@ const Shifts = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 };
 

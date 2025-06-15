@@ -5,7 +5,7 @@ import dayjs from 'dayjs';
 import 'dayjs/locale/zh-tw';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ChevronLeft, ChevronRight, TriangleAlert } from 'lucide-react';
+import { ChevronLeft, ChevronRight, TriangleAlert, Download } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Shift } from '@/lib/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -65,19 +65,155 @@ const Schedule = () => {
   };
   
   const shiftsForSelectedSlot = selectedSlot ? getShiftsForSlot(selectedSlot) : [];
+  
+  const handleExportCSV = () => {
+    const csvRows = [['日期', '星期', '時段', '班別', '藥師']];
+    const pharmacistMap = new Map(pharmacists.map(p => [p.id, p.name]));
+    const shiftMap = new Map(shifts.map(s => [s.id, s.name]));
+
+    daysInMonth.forEach(day => {
+        const dateStr = day.format('YYYY-MM-DD');
+        const dayOfWeek = day.format('ddd');
+        const dailySchedule = schedule[dateStr] || {};
+        
+        if (day.day() === 0) {
+            return;
+        }
+        
+        TIME_SLOTS.forEach(slot => {
+            if (day.day() === 6 && slot.name === '晚班') return;
+
+            const relevantShifts = getShiftsForSlot(slot);
+            if (relevantShifts.length === 0) {
+                 csvRows.push([dateStr, dayOfWeek, slot.name, '無適用班型', '']);
+            } else {
+                relevantShifts.forEach(shift => {
+                    const pharmacistId = dailySchedule[shift.id];
+                    const pharmacistName = pharmacistId ? pharmacistMap.get(pharmacistId) || '未知藥師' : '未指派';
+                    csvRows.push([
+                        dateStr,
+                        dayOfWeek,
+                        slot.name,
+                        shift.name,
+                        pharmacistName,
+                    ]);
+                });
+            }
+        });
+    });
+
+    const csvContent = csvRows.map(e => e.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `${currentDate.format('YYYY-MM')}_排班表.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+  };
+  
+  const handleExportHTML = () => {
+    const pharmacistMap = new Map(pharmacists.map(p => [p.id, p.name]));
+    
+    const tableRows = daysInMonth.map(day => {
+        const dateStr = day.format('YYYY-MM-DD');
+        const dailySchedule = schedule[dateStr] || {};
+        const isSunday = day.day() === 0;
+        const isSaturday = day.day() === 6;
+
+        let cells = '';
+        if (isSunday) {
+            cells = `<td colspan="${TIME_SLOTS.length}" style="text-align: center; color: #71717a; background-color: #f3f4f6;">週日公休</td>`;
+        } else {
+            cells = TIME_SLOTS.map(slot => {
+                if (isSaturday && slot.name === '晚班') {
+                    return `<td style="background-color: #f5f5f5; text-align: center; color: #71717a;">無夜班</td>`;
+                }
+                const relevantShifts = getShiftsForSlot(slot);
+                const shiftContent = relevantShifts.map(shift => {
+                    const pharmacistId = dailySchedule[shift.id];
+                    const pharmacistName = pharmacistId ? pharmacistMap.get(pharmacistId) : '未指派';
+                    return `<div style="border: 1px solid #e5e7eb; border-radius: 0.375rem; padding: 4px; margin-bottom: 4px; background-color: #ffffff;">
+                                <strong style="font-weight: 600;">${shift.name}:</strong> ${pharmacistName}
+                            </div>`;
+                }).join('');
+                return `<td><div style="min-height: 40px;">${shiftContent || '<span style="color: #a1a1aa; font-size: 12px;">無適用班型</span>'}</div></td>`;
+            }).join('');
+        }
+
+        return `
+            <tr>
+                <td style="font-weight: 500; vertical-align: top; ${isSaturday ? 'color: #2563eb;' : ''} ${isSunday ? 'color: #dc2626;' : ''}">${day.format('MM/DD')} (${day.format('ddd')})</td>
+                ${cells}
+            </tr>
+        `;
+    }).join('');
+
+    const htmlContent = \`
+        <html>
+            <head>
+                <title>排班表 - \${currentDate.format('YYYY 年 MM 月')}</title>
+                <meta charset="UTF-8">
+                <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; line-height: 1.5; }
+                    table { width: 100%; border-collapse: collapse; }
+                    th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; font-size: 14px; vertical-align: top; }
+                    th { background-color: #f9fafb; font-weight: 600; }
+                    h1 { text-align: center; font-size: 24px; margin-bottom: 20px; }
+                </style>
+            </head>
+            <body>
+                <h1>排班表 - \${currentDate.format('YYYY 年 MM 月')}</h1>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 100px;">日期</th>
+                            \${TIME_SLOTS.map(slot => \`<th>\${slot.name} <br><span style="font-size: 12px; font-weight: normal; color: #71717a;">(\${slot.start}-\${slot.end})</span></th>\`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        \${tableRows}
+                    </tbody>
+                </table>
+            </body>
+        </html>
+    \`;
+
+    const newWindow = window.open();
+    if (newWindow) {
+        newWindow.document.write(htmlContent);
+        newWindow.document.close();
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-center gap-4">
-        <Button variant="outline" size="icon" onClick={() => setCurrentDate(currentDate.subtract(1, 'month'))}>
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <h1 className="text-2xl font-bold text-center">
-          {currentDate.format('YYYY 年 MM 月')}
-        </h1>
-        <Button variant="outline" size="icon" onClick={() => setCurrentDate(currentDate.add(1, 'month'))}>
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center justify-center gap-4 flex-grow sm:flex-grow-0">
+          <Button variant="outline" size="icon" onClick={() => setCurrentDate(currentDate.subtract(1, 'month'))}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <h1 className="text-2xl font-bold text-center">
+            {currentDate.format('YYYY 年 MM 月')}
+          </h1>
+          <Button variant="outline" size="icon" onClick={() => setCurrentDate(currentDate.add(1, 'month'))}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="flex gap-2 justify-center w-full sm:w-auto">
+            <Button variant="outline" onClick={handleExportCSV}>
+                <Download />
+                匯出 CSV
+            </Button>
+            <Button variant="outline" onClick={handleExportHTML}>
+                <Download />
+                匯出 HTML
+            </Button>
+        </div>
       </div>
 
       <Card>

@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
 import { Calendar } from '@/components/ui/calendar';
@@ -9,7 +8,7 @@ import dayjs from 'dayjs';
 import { toast } from 'sonner';
 
 const Leave = () => {
-  const { pharmacists, leave, addLeave, deleteLeave, shifts, schedule } = useAppContext();
+  const { pharmacists, leave, addLeave, deleteLeave, shifts, schedule, saturdayLeaveLimits } = useAppContext();
   const [selectedPharmacist, setSelectedPharmacist] = useState<Pharmacist | null>(null);
   const [month, setMonth] = useState<Date>(new Date());
 
@@ -55,7 +54,7 @@ const Leave = () => {
         ).length;
 
         // 3. Check against limit
-        const limit = isNightWorker ? 2 : 1;
+        const limit = isNightWorker ? saturdayLeaveLimits.night : saturdayLeaveLimits.regular;
         if (saturdayLeaveCount >= limit) {
             toast.warning(`週六休假已達上限`, {
                 description: `${selectedPharmacist.name} ${isNightWorker ? '(本月有夜班)' : ''}，每月最多可排休 ${limit} 個週六。`,
