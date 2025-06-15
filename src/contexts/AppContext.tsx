@@ -140,7 +140,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const assignSupport = (date: string, timeSlot: 'morning' | 'afternoon', pharmacistId: string, index: number) => {
     setSchedule(prev => {
         const newSchedule = JSON.parse(JSON.stringify(prev));
-        const daySchedule = newSchedule[date] || { shifts: {} };
+        const daySchedule = newSchedule[date] || {};
+        if (!daySchedule.shifts) {
+          daySchedule.shifts = {};
+        }
 
         // When assigning, clear conflicting shifts for the newly assigned pharmacist
         if (pharmacistId && pharmacistId !== 'unassign') {

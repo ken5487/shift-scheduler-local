@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
 import dayjs from 'dayjs';
@@ -81,9 +82,9 @@ const Schedule = () => {
     daysInMonth.forEach(day => {
         const dateStr = day.format('YYYY-MM-DD');
         const dayOfWeek = day.format('ddd');
-        const dailySchedule = schedule[dateStr] || { shifts: {} };
+        const dailySchedule = { shifts: {}, ...(schedule[dateStr] || {}) };
         
-        if (day.day() === 0 || !dailySchedule) {
+        if (day.day() === 0) {
             return;
         }
         
@@ -128,14 +129,14 @@ const Schedule = () => {
     
     const tableRows = daysInMonth.map(day => {
         const dateStr = day.format('YYYY-MM-DD');
-        const dailySchedule = schedule[dateStr] || { shifts: {} };
+        const dailySchedule = { shifts: {}, ...(schedule[dateStr] || {}) };
         const isSunday = day.day() === 0;
         const isSaturday = day.day() === 6;
 
         let cells = '';
         if (isSunday) {
             cells = `<td colspan="${TIME_SLOTS.length}" style="text-align: center; color: #71717a; background-color: #f3f4f6;">週日公休</td>`;
-        } else if (!dailySchedule) {
+        } else if (!schedule[dateStr]) {
             cells = `<td colspan="${TIME_SLOTS.length + 1}" style="text-align: center; color: #71717a;">未排班</td>`;
         }
         else {
@@ -242,7 +243,7 @@ const Schedule = () => {
             <TableBody>
               {daysInMonth.map(day => {
                 const dateStr = day.format('YYYY-MM-DD');
-                const dailySchedule = schedule[dateStr] || { shifts: {} };
+                const dailySchedule = { shifts: {}, ...(schedule[dateStr] || {}) };
                 const pharmacistsOnLeaveToday = pharmacists.filter(p => isPharmacistOnLeave(p.id, dateStr));
                 const isSunday = day.day() === 0;
                 const isSaturday = day.day() === 6;
@@ -459,7 +460,7 @@ const Schedule = () => {
           <div className="py-4 flex flex-col gap-4">
             {shiftsForSelectedSlot.length > 0 ? shiftsForSelectedSlot.map(shift => {
                const dateStr = selectedDay!.format('YYYY-MM-DD');
-               const dailySchedule = schedule[dateStr] || { shifts: {} };
+               const dailySchedule = { shifts: {}, ...(schedule[dateStr] || {}) };
                const isSaturdayDialog = selectedDay?.day() === 6;
                const availablePharmacists = isSaturdayDialog
                 ? pharmacists.filter(p => p.position === '兼職' && !isPharmacistOnLeave(p.id, dateStr))
