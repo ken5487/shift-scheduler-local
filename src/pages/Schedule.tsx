@@ -4,34 +4,66 @@ import { useAppContext } from '@/contexts/AppContext';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-tw';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Shift } from '@/lib/types';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 dayjs.locale('zh-tw');
 
+const TIME_SLOTS = [
+  { name: '早班', start: '08:30', end: '12:00' },
+  { name: '午班', start: '13:00', end: '17:30' },
+  { name: '晚班', start: '18:00', end: '22:00' },
+];
+
+const doTimesOverlap = (shift: Shift, slot: { start: string; end: string }) => {
+  const toMinutes = (timeStr: string) => {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    return hours * 60 + minutes;
+  };
+
+  const shiftStart = toMinutes(shift.startTime);
+  const shiftEnd = toMinutes(shift.endTime);
+  const slotStart = toMinutes(slot.start);
+  const slotEnd = toMinutes(slot.end);
+
+  const effectiveShiftEnd = shiftEnd === 0 ? 24 * 60 : shiftEnd;
+
+  return shiftStart < slotEnd && effectiveShiftEnd > slotStart;
+};
+
+
 const Schedule = () => {
-  const { shifts, pharmacists, schedule, assignShift } = useAppContext();
+  const { shifts, pharmacists, schedule, assignShift, isPharmacistOnLeave } = useAppContext();
   const [currentDate, setCurrentDate] = useState(dayjs());
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<dayjs.Dayjs | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<{ name: string; start: string; end: string; } | null>(null);
 
   const startOfMonth = currentDate.startOf('month');
   const endOfMonth = currentDate.endOf('month');
   const daysInMonth = [];
   let day = startOfMonth;
-  
-  // Pad start of month
-  for (let i = 0; i < startOfMonth.day(); i++) {
-    daysInMonth.push(null);
-  }
 
   while(day.isBefore(endOfMonth) || day.isSame(endOfMonth, 'day')) {
     daysInMonth.push(day);
     day = day.add(1, 'day');
   }
-
-  const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
-
-  const getPharmacistName = (id: string) => pharmacists.find(p => p.id === id)?.name || '未指派';
+  
+  const getShiftsForSlot = (slot: { start: string; end: string }) => {
+    return shifts.filter(shift => doTimesOverlap(shift, slot));
+  };
+  
+  const openAssignmentDialog = (day: dayjs.Dayjs, slot: { name: string; start: string; end:string; }) => {
+    setSelectedDay(day);
+    setSelectedSlot(slot);
+    setIsDialogOpen(true);
+  };
+  
+  const shiftsForSelectedSlot = selectedSlot ? getShiftsForSlot(selectedSlot) : [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -47,48 +79,91 @@ const Schedule = () => {
         </Button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1">
-        {weekdays.map(weekday => (
-          <div key={weekday} className="text-center font-semibold text-muted-foreground p-2">{weekday}</div>
-        ))}
-        {daysInMonth.map((day, index) => {
-          if (!day) return <div key={`empty-${index}`} className="border rounded-lg bg-muted/20" />;
-
-          const dateStr = day.format('YYYY-MM-DD');
-          const dailyShifts = schedule[dateStr] || {};
-          
-          return (
-            <Card key={dateStr} className="min-h-[160px]">
-              <CardHeader className="p-2">
-                <CardTitle className={`text-sm font-medium ${day.isSame(dayjs(), 'day') ? 'text-primary' : ''}`}>
-                  {day.format('D')}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-2 flex flex-col gap-2">
-                {shifts.map(shift => (
-                  <div key={shift.id} className="flex items-center gap-1 text-xs">
-                    <span className="font-semibold w-10 truncate">{shift.name}</span>
-                    <Select
-                      value={dailyShifts[shift.id]}
-                      onValueChange={(pharmacistId) => assignShift(dateStr, shift.id, pharmacistId)}
-                    >
-                      <SelectTrigger className="flex-1 h-7">
-                        <SelectValue placeholder="指派藥師" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="unassign">取消指派</SelectItem>
-                        {pharmacists.map(p => (
-                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+      <Card>
+        <CardContent className="pt-6">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[120px]">日期</TableHead>
+                {TIME_SLOTS.map(slot => (
+                  <TableHead key={slot.name}>{slot.name} <span className="text-xs font-normal text-muted-foreground">({slot.start}-{slot.end})</span></TableHead>
                 ))}
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {daysInMonth.map(day => {
+                const dateStr = day.format('YYYY-MM-DD');
+                const dailySchedule = schedule[dateStr] || {};
+                
+                return (
+                  <TableRow key={dateStr}>
+                    <TableCell className="font-medium">
+                      {day.format('MM/DD')} ({day.format('ddd')})
+                    </TableCell>
+                    {TIME_SLOTS.map(slot => {
+                      const relevantShifts = getShiftsForSlot(slot);
+                      return (
+                        <TableCell key={slot.name} className="align-top cursor-pointer hover:bg-muted/50 p-2" onClick={() => openAssignmentDialog(day, slot)}>
+                          <div className="flex flex-col gap-1 min-h-[60px]">
+                            {relevantShifts.length > 0 ? relevantShifts.map(shift => {
+                                const pharmacistId = dailySchedule[shift.id];
+                                const pharmacist = pharmacists.find(p => p.id === pharmacistId);
+                                return (
+                                  <div key={shift.id} className="text-xs p-1.5 rounded-md bg-background border">
+                                    <span className="font-semibold">{shift.name}:</span>{' '}
+                                    <span className={pharmacist ? 'text-primary font-bold' : 'text-muted-foreground'}>
+                                      {pharmacist ? pharmacist.name : '未指派'}
+                                    </span>
+                                  </div>
+                                )
+                              }) : <div className="text-xs text-muted-foreground flex items-center justify-center h-full">無適用班型</div>}
+                          </div>
+                        </TableCell>
+                      )
+                    })}
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+      
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>指派 {selectedDay?.format('MM/DD')} {selectedSlot?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 flex flex-col gap-4">
+            {shiftsForSelectedSlot.length > 0 ? shiftsForSelectedSlot.map(shift => {
+               const dateStr = selectedDay!.format('YYYY-MM-DD');
+               const dailySchedule = schedule[dateStr] || {};
+               const availablePharmacists = pharmacists.filter(p => !isPharmacistOnLeave(p.id, dateStr));
+
+              return (
+              <div key={shift.id} className="grid grid-cols-4 items-center gap-4">
+                <span className="text-right font-medium">{shift.name}</span>
+                <div className="col-span-3">
+                  <Select
+                    value={dailySchedule[shift.id]}
+                    onValueChange={(pharmacistId) => assignShift(dateStr, shift.id, pharmacistId)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="指派藥師" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassign">取消指派</SelectItem>
+                      {availablePharmacists.map(p => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}) : <p className="text-center text-muted-foreground">此時段沒有可以指派的班型。</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

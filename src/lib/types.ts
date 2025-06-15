@@ -1,4 +1,3 @@
-
 export interface Pharmacist {
   id: string;
   name: string;
@@ -18,4 +17,10 @@ export interface DailySchedule {
 
 export interface MonthlySchedule {
   [day: string]: DailySchedule; // day is YYYY-MM-DD
+}
+
+export interface Leave {
+  id: string;
+  pharmacistId: string;
+  date: string; // YYYY-MM-DD
 }

@@ -1,6 +1,6 @@
 
 import { NavLink, Outlet } from 'react-router-dom';
-import { Home, Calendar, Users, Clock, Syringe } from 'lucide-react';
+import { Home, Calendar, Users, Clock, Syringe, CalendarOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const Layout = () => {
@@ -9,6 +9,7 @@ const Layout = () => {
     { to: '/schedule', label: '排班表', icon: Calendar },
     { to: '/staff', label: '藥師管理', icon: Users },
     { to: '/shifts', label: '班型管理', icon: Clock },
+    { to: '/leave', label: '休假管理', icon: CalendarOff },
   ];
 
   return (
