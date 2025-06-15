@@ -116,30 +116,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const addLeave = (pharmacistId: string, date: string) => {
     if (leave.some(l => l.pharmacistId === pharmacistId && l.date === date)) return;
     setLeave(prevLeave => [...prevLeave, { id: uuidv4(), pharmacistId, date }]);
-
-    // Un-assign any shifts for this pharmacist on this date
-    setSchedule(prevSchedule => {
-      const newSchedule = { ...prevSchedule };
-      if (newSchedule[date]) {
-        const dailySchedule = { ...newSchedule[date] };
-        let changed = false;
-        Object.keys(dailySchedule).forEach(shiftId => {
-          if (dailySchedule[shiftId] === pharmacistId) {
-            delete dailySchedule[shiftId];
-            changed = true;
-          }
-        });
-
-        if (changed) {
-          if (Object.keys(dailySchedule).length === 0) {
-            delete newSchedule[date];
-          } else {
-            newSchedule[date] = dailySchedule;
-          }
-        }
-      }
-      return newSchedule;
-    });
+    // 之前會在這裡自動清除排班，現在我們移除這段邏輯。
+    // UI 將會負責顯示排班與休假的衝突。
   };
 
   const deleteLeave = (pharmacistId: string, date: string) => {

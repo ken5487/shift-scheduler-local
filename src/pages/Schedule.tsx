@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Shift } from '@/lib/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 dayjs.locale('zh-tw');
 
@@ -117,12 +118,21 @@ const Schedule = () => {
                             {relevantShifts.length > 0 ? relevantShifts.map(shift => {
                                 const pharmacistId = dailySchedule[shift.id];
                                 const pharmacist = pharmacists.find(p => p.id === pharmacistId);
+                                const hasLeaveConflict = !!pharmacistId && isPharmacistOnLeave(pharmacistId, dateStr);
+
                                 return (
-                                  <div key={shift.id} className="text-xs p-1.5 rounded-md bg-background border">
+                                  <div key={shift.id} className={cn(
+                                    "text-xs p-1.5 rounded-md bg-background border",
+                                    hasLeaveConflict && "border-destructive"
+                                  )}>
                                     <span className="font-semibold">{shift.name}:</span>{' '}
-                                    <span className={pharmacist ? 'text-primary font-bold' : 'text-muted-foreground'}>
+                                    <span className={pharmacist 
+                                      ? (hasLeaveConflict ? 'text-destructive font-bold' : 'text-primary font-bold') 
+                                      : 'text-muted-foreground'
+                                    }>
                                       {pharmacist ? pharmacist.name : '未指派'}
                                     </span>
+                                    {hasLeaveConflict && <div className="text-destructive font-semibold mt-1">休假中</div>}
                                   </div>
                                 )
                               }) : <div className="text-xs text-muted-foreground flex items-center justify-center h-full">無適用班型</div>}
