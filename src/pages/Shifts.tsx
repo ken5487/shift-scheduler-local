@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,86 +11,41 @@ import { Shift } from '@/lib/types';
 import { PlusCircle, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-const SaturdayLeaveSettingsCard = () => {
-  const { saturdayLeaveLimits, updateSaturdayLeaveLimits } = useAppContext();
-  const [limits, setLimits] = useState(saturdayLeaveLimits);
-
-  useEffect(() => {
-    setLimits(saturdayLeaveLimits);
-  }, [saturdayLeaveLimits]);
-
-  const handleSave = () => {
-    const regularLimit = Number(limits.regular);
-    const nightLimit = Number(limits.night);
-
-    if (isNaN(regularLimit) || isNaN(nightLimit) || regularLimit < 0 || nightLimit < 0) {
-      toast.error('請輸入有效的數字 (必須大於或等於 0)');
-      return;
-    }
-
-    updateSaturdayLeaveLimits({
-      regular: regularLimit,
-      night: nightLimit,
-    });
-    toast.success('週六休假設定已儲存');
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>週六休假上限設定</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-6 md:grid-cols-2">
-          <div className="grid gap-2">
-            <Label htmlFor="regular-limit">一般藥師 (每月可排休週六天數)</Label>
-            <Input
-              id="regular-limit"
-              type="number"
-              value={limits.regular}
-              onChange={(e) => setLimits(prev => ({ ...prev, regular: Number(e.target.value) }))}
-              min="0"
-              placeholder="例如: 1"
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="night-limit">有夜班藥師 (每月可排休週六天數)</Label>
-            <Input
-              id="night-limit"
-              type="number"
-              value={limits.night}
-              onChange={(e) => setLimits(prev => ({ ...prev, night: Number(e.target.value) }))}
-              min="0"
-              placeholder="例如: 2"
-            />
-          </div>
-        </div>
-        <div className="mt-6 flex justify-end">
-          <Button onClick={handleSave}>儲存設定</Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
-
 const Shifts = () => {
   const { shifts, addShift, updateShift, deleteShift } = useAppContext();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [currentShift, setCurrentShift] = useState<Shift | null>(null);
-  const [formData, setFormData] = useState({ name: '', startTime: '08:00', endTime: '16:00' });
+  const [formData, setFormData] = useState({ name: '', startTime: '08:00', endTime: '16:00', saturdayLeaveLimit: 1 });
 
   const openDialog = (shift: Shift | null = null) => {
     setCurrentShift(shift);
-    setFormData(shift ? { name: shift.name, startTime: shift.startTime, endTime: shift.endTime } : { name: '', startTime: '08:00', endTime: '16:00' });
+    if (shift) {
+      setFormData(shift);
+    } else {
+      setFormData({ name: '', startTime: '08:00', endTime: '16:00', saturdayLeaveLimit: 1 });
+    }
     setIsDialogOpen(true);
   };
 
   const handleSave = () => {
-    if (!formData.name) return;
+    if (!formData.name) {
+      toast.error('請輸入班型名稱');
+      return;
+    }
+    const limit = Number(formData.saturdayLeaveLimit);
+    if (isNaN(limit) || limit < 0) {
+      toast.error('請輸入有效的週六休假天數 (必須大於或等於 0)');
+      return;
+    }
+
+    const shiftData = { ...formData, saturdayLeaveLimit: limit };
+
     if (currentShift) {
-      updateShift({ ...currentShift, ...formData });
+      updateShift(shiftData);
+      toast.success('班型已更新');
     } else {
-      addShift(formData);
+      addShift(shiftData);
+      toast.success('班型已新增');
     }
     setIsDialogOpen(false);
   };
@@ -112,6 +67,7 @@ const Shifts = () => {
                 <TableHead>班型名稱</TableHead>
                 <TableHead>開始時間</TableHead>
                 <TableHead>結束時間</TableHead>
+                <TableHead>週六可休天數</TableHead>
                 <TableHead className="text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
@@ -121,6 +77,7 @@ const Shifts = () => {
                   <TableCell className="font-medium">{shift.name}</TableCell>
                   <TableCell>{shift.startTime}</TableCell>
                   <TableCell>{shift.endTime}</TableCell>
+                  <TableCell>{shift.saturdayLeaveLimit}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => openDialog(shift)}>
                       <Edit className="h-4 w-4" />
@@ -135,8 +92,6 @@ const Shifts = () => {
           </Table>
         </CardContent>
       </Card>
-      
-      <SaturdayLeaveSettingsCard />
       
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
@@ -155,6 +110,18 @@ const Shifts = () => {
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="endTime" className="text-right">結束時間</Label>
               <Input id="endTime" type="time" value={formData.endTime} onChange={(e) => setFormData({...formData, endTime: e.target.value})} className="col-span-3" />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="saturdayLeaveLimit" className="text-right">週六休假上限</Label>
+              <Input 
+                id="saturdayLeaveLimit"
+                type="number"
+                value={formData.saturdayLeaveLimit}
+                onChange={(e) => setFormData(prev => ({ ...prev, saturdayLeaveLimit: e.target.value === '' ? 0 : parseInt(e.target.value, 10) }))}
+                className="col-span-3"
+                min="0"
+                placeholder="例如: 1"
+              />
             </div>
           </div>
           <DialogFooter>

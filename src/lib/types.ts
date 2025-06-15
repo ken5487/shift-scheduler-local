@@ -1,3 +1,4 @@
+
 export interface Pharmacist {
   id: string;
   name: string;
@@ -9,6 +10,7 @@ export interface Shift {
   name: string;
   startTime: string;
   endTime: string;
+  saturdayLeaveLimit: number;
 }
 
 export interface DailySchedule {
@@ -25,7 +27,3 @@ export interface Leave {
   date: string; // YYYY-MM-DD
 }
 
-export interface SaturdayLeaveLimits {
-  regular: number;
-  night: number;
-}

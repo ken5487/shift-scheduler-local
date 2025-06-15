@@ -1,14 +1,15 @@
+
 import { useState } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Pharmacist } from '@/lib/types';
+import { Pharmacist, Shift } from '@/lib/types';
 import dayjs from 'dayjs';
 import { toast } from 'sonner';
 
 const Leave = () => {
-  const { pharmacists, leave, addLeave, deleteLeave, shifts, schedule, saturdayLeaveLimits } = useAppContext();
+  const { pharmacists, leave, addLeave, deleteLeave, shifts, schedule } = useAppContext();
   const [selectedPharmacist, setSelectedPharmacist] = useState<Pharmacist | null>(null);
   const [month, setMonth] = useState<Date>(new Date());
 
@@ -27,24 +28,38 @@ const Leave = () => {
     } else {
       const clickedDayJs = dayjs(day);
       if (clickedDayJs.day() === 6) { // It's a Saturday
-        // 1. Check if pharmacist is a night shift worker this month
-        const nightShiftIds = shifts.filter(s => s.name === '晚班').map(s => s.id);
-        let isNightWorker = false;
-        if (nightShiftIds.length > 0 && selectedPharmacist) {
-            const startOfMonth = dayjs(month).startOf('month');
-            const endOfMonth = dayjs(month).endOf('month');
-            for (let d = startOfMonth; d.isBefore(endOfMonth.add(1, 'day')); d = d.add(1, 'day')) {
-                const dateStrInner = d.format('YYYY-MM-DD');
-                const dailySchedule = schedule[dateStrInner];
-                if (dailySchedule) {
-                    for (const shiftId of nightShiftIds) {
-                        if (dailySchedule[shiftId] === selectedPharmacist.id) {
-                            isNightWorker = true;
-                            break;
-                        }
+        // 1. Determine the pharmacist's Saturday leave limit for the month.
+        const pharmacistShiftsInMonth = new Set<string>();
+        const startOfMonth = dayjs(month).startOf('month');
+        const endOfMonth = dayjs(month).endOf('month');
+
+        for (let d = startOfMonth; d.isBefore(endOfMonth.add(1, 'day')); d = d.add(1, 'day')) {
+            const dateStrInner = d.format('YYYY-MM-DD');
+            const dailySchedule = schedule[dateStrInner];
+            if (dailySchedule) {
+                for (const shiftId in dailySchedule) {
+                    if (dailySchedule[shiftId] === selectedPharmacist.id) {
+                        pharmacistShiftsInMonth.add(shiftId);
                     }
                 }
-                if (isNightWorker) break;
+            }
+        }
+        
+        let limit = 1; // Default limit
+        let limitReasonShiftName = '';
+
+        if (pharmacistShiftsInMonth.size > 0) {
+            const shiftsWithLimits = [...pharmacistShiftsInMonth]
+                .map(shiftId => shifts.find(s => s.id === shiftId))
+                .filter((s): s is Shift => !!s && s.saturdayLeaveLimit != null);
+
+            if (shiftsWithLimits.length > 0) {
+                const maxLimitShift = shiftsWithLimits.reduce((maxShift, currentShift) => {
+                    return currentShift.saturdayLeaveLimit > maxShift.saturdayLeaveLimit ? currentShift : maxShift;
+                }, shiftsWithLimits[0]);
+                
+                limit = maxLimitShift.saturdayLeaveLimit;
+                limitReasonShiftName = maxLimitShift.name;
             }
         }
         
@@ -54,10 +69,9 @@ const Leave = () => {
         ).length;
 
         // 3. Check against limit
-        const limit = isNightWorker ? saturdayLeaveLimits.night : saturdayLeaveLimits.regular;
         if (saturdayLeaveCount >= limit) {
             toast.warning(`週六休假已達上限`, {
-                description: `${selectedPharmacist.name} ${isNightWorker ? '(本月有夜班)' : ''}，每月最多可排休 ${limit} 個週六。`,
+                description: `${selectedPharmacist.name} 的每月週六休假上限為 ${limit} 天。` + (limitReasonShiftName ? ` (因本月有排 ${limitReasonShiftName})` : ''),
             });
             return;
         }
