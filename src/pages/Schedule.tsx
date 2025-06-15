@@ -1,10 +1,11 @@
+
 import { useState } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-tw';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, TriangleAlert } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Shift } from '@/lib/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -95,12 +96,30 @@ const Schedule = () => {
                 const dateStr = day.format('YYYY-MM-DD');
                 const dailySchedule = schedule[dateStr] || {};
                 const pharmacistsOnLeaveToday = pharmacists.filter(p => isPharmacistOnLeave(p.id, dateStr));
+                const isSunday = day.day() === 0;
+                const isSaturday = day.day() === 6;
+
+                let saturdayWarning = null;
+                if (isSaturday) {
+                    const assignedCount = Object.values(dailySchedule).filter(Boolean).length;
+                    if (assignedCount < 3) {
+                        saturdayWarning = (
+                            <div className="flex items-center gap-1 text-xs text-destructive mt-1 font-normal">
+                                <TriangleAlert className="h-3 w-3" />
+                                <span>排班人數不足 (應為3人)</span>
+                            </div>
+                        );
+                    }
+                }
                 
                 return (
-                  <TableRow key={dateStr}>
+                  <TableRow key={dateStr} className={cn(isSunday && "bg-muted/50")}>
                     <TableCell className="font-medium align-top">
                       <div className="flex flex-col">
-                        <span>{day.format('MM/DD')} ({day.format('ddd')})</span>
+                        <span className={cn(isSaturday && "text-blue-600 font-bold", isSunday && "text-red-600 font-bold")}>
+                          {day.format('MM/DD')} ({day.format('ddd')})
+                        </span>
+                        {saturdayWarning}
                         <div className="mt-1 space-y-1">
                           {pharmacistsOnLeaveToday.map(p => (
                             <div key={p.id} className="text-xs text-destructive-foreground bg-destructive/80 px-2 py-0.5 rounded-full w-fit">
@@ -110,36 +129,51 @@ const Schedule = () => {
                         </div>
                       </div>
                     </TableCell>
-                    {TIME_SLOTS.map(slot => {
-                      const relevantShifts = getShiftsForSlot(slot);
-                      return (
-                        <TableCell key={slot.name} className="align-top cursor-pointer hover:bg-muted/50 p-2" onClick={() => openAssignmentDialog(day, slot)}>
-                          <div className="flex flex-col gap-1 min-h-[60px]">
-                            {relevantShifts.length > 0 ? relevantShifts.map(shift => {
-                                const pharmacistId = dailySchedule[shift.id];
-                                const pharmacist = pharmacists.find(p => p.id === pharmacistId);
-                                const hasLeaveConflict = !!pharmacistId && isPharmacistOnLeave(pharmacistId, dateStr);
+                    {isSunday ? (
+                      <TableCell colSpan={TIME_SLOTS.length} className="text-center text-muted-foreground font-semibold">
+                        週日公休
+                      </TableCell>
+                    ) : (
+                      TIME_SLOTS.map(slot => {
+                        if (isSaturday && slot.name === '晚班') {
+                          return (
+                            <TableCell key={slot.name} className="align-top p-2 bg-muted/40">
+                              <div className="flex flex-col gap-1 min-h-[60px] items-center justify-center text-muted-foreground text-sm">
+                                無夜班
+                              </div>
+                            </TableCell>
+                          );
+                        }
+                        const relevantShifts = getShiftsForSlot(slot);
+                        return (
+                          <TableCell key={slot.name} className="align-top cursor-pointer hover:bg-muted/50 p-2" onClick={() => openAssignmentDialog(day, slot)}>
+                            <div className="flex flex-col gap-1 min-h-[60px]">
+                              {relevantShifts.length > 0 ? relevantShifts.map(shift => {
+                                  const pharmacistId = dailySchedule[shift.id];
+                                  const pharmacist = pharmacists.find(p => p.id === pharmacistId);
+                                  const hasLeaveConflict = !!pharmacistId && isPharmacistOnLeave(pharmacistId, dateStr);
 
-                                return (
-                                  <div key={shift.id} className={cn(
-                                    "text-xs p-1.5 rounded-md bg-background border",
-                                    hasLeaveConflict && "border-destructive"
-                                  )}>
-                                    <span className="font-semibold">{shift.name}:</span>{' '}
-                                    <span className={pharmacist 
-                                      ? (hasLeaveConflict ? 'text-destructive font-bold' : 'text-primary font-bold') 
-                                      : 'text-muted-foreground'
-                                    }>
-                                      {pharmacist ? pharmacist.name : '未指派'}
-                                    </span>
-                                    {hasLeaveConflict && <div className="text-destructive font-semibold mt-1">休假中</div>}
-                                  </div>
-                                )
-                              }) : <div className="text-xs text-muted-foreground flex items-center justify-center h-full">無適用班型</div>}
-                          </div>
-                        </TableCell>
-                      )
-                    })}
+                                  return (
+                                    <div key={shift.id} className={cn(
+                                      "text-xs p-1.5 rounded-md bg-background border",
+                                      hasLeaveConflict && "border-destructive"
+                                    )}>
+                                      <span className="font-semibold">{shift.name}:</span>{' '}
+                                      <span className={pharmacist 
+                                        ? (hasLeaveConflict ? 'text-destructive font-bold' : 'text-primary font-bold') 
+                                        : 'text-muted-foreground'
+                                      }>
+                                        {pharmacist ? pharmacist.name : '未指派'}
+                                      </span>
+                                      {hasLeaveConflict && <div className="text-destructive font-semibold mt-1">休假中</div>}
+                                    </div>
+                                  )
+                                }) : <div className="text-xs text-muted-foreground flex items-center justify-center h-full">無適用班型</div>}
+                            </div>
+                          </TableCell>
+                        )
+                      })
+                    )}
                   </TableRow>
                 )
               })}

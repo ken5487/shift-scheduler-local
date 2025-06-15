@@ -6,9 +6,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Pharmacist } from '@/lib/types';
 import dayjs from 'dayjs';
+import { toast } from 'sonner';
 
 const Leave = () => {
-  const { pharmacists, leave, addLeave, deleteLeave } = useAppContext();
+  const { pharmacists, leave, addLeave, deleteLeave, shifts, schedule } = useAppContext();
   const [selectedPharmacist, setSelectedPharmacist] = useState<Pharmacist | null>(null);
   const [month, setMonth] = useState<Date>(new Date());
 
@@ -25,6 +26,43 @@ const Leave = () => {
     if (isOnLeave) {
       deleteLeave(selectedPharmacist.id, dateStr);
     } else {
+      const clickedDayJs = dayjs(day);
+      if (clickedDayJs.day() === 6) { // It's a Saturday
+        // 1. Check if pharmacist is a night shift worker this month
+        const nightShiftIds = shifts.filter(s => s.name === '晚班').map(s => s.id);
+        let isNightWorker = false;
+        if (nightShiftIds.length > 0 && selectedPharmacist) {
+            const startOfMonth = dayjs(month).startOf('month');
+            const endOfMonth = dayjs(month).endOf('month');
+            for (let d = startOfMonth; d.isBefore(endOfMonth.add(1, 'day')); d = d.add(1, 'day')) {
+                const dateStrInner = d.format('YYYY-MM-DD');
+                const dailySchedule = schedule[dateStrInner];
+                if (dailySchedule) {
+                    for (const shiftId of nightShiftIds) {
+                        if (dailySchedule[shiftId] === selectedPharmacist.id) {
+                            isNightWorker = true;
+                            break;
+                        }
+                    }
+                }
+                if (isNightWorker) break;
+            }
+        }
+        
+        // 2. Count existing Saturday leaves for this pharmacist in the current month
+        const saturdayLeaveCount = pharmacistLeaveDates.filter(d => 
+            dayjs(d).isSame(month, 'month') && dayjs(d).day() === 6
+        ).length;
+
+        // 3. Check against limit
+        const limit = isNightWorker ? 2 : 1;
+        if (saturdayLeaveCount >= limit) {
+            toast.warning(`週六休假已達上限`, {
+                description: `${selectedPharmacist.name} ${isNightWorker ? '(本月有夜班)' : ''}，每月最多可排休 ${limit} 個週六。`,
+            });
+            return;
+        }
+      }
       addLeave(selectedPharmacist.id, dateStr);
     }
   };
@@ -64,8 +102,9 @@ const Leave = () => {
                 month={month}
                 onMonthChange={setMonth}
                 className="rounded-md border"
+                disabled={(date) => dayjs(date).day() === 0} // Disable Sundays
               />
-              <p className="text-sm text-muted-foreground mt-2 text-center">點擊日期即可新增或移除休假。</p>
+              <p className="text-sm text-muted-foreground mt-2 text-center">點擊日期即可新增或移除休假。週日為公休日。</p>
             </div>
           </CardContent>
         </Card>
