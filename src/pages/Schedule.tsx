@@ -153,10 +153,10 @@ const Schedule = () => {
         `;
     }).join('');
 
-    const htmlContent = \`
+    const htmlContent = `
         <html>
             <head>
-                <title>排班表 - \${currentDate.format('YYYY 年 MM 月')}</title>
+                <title>排班表 - ${currentDate.format('YYYY 年 MM 月')}</title>
                 <meta charset="UTF-8">
                 <style>
                     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; line-height: 1.5; }
@@ -167,21 +167,21 @@ const Schedule = () => {
                 </style>
             </head>
             <body>
-                <h1>排班表 - \${currentDate.format('YYYY 年 MM 月')}</h1>
+                <h1>排班表 - ${currentDate.format('YYYY 年 MM 月')}</h1>
                 <table>
                     <thead>
                         <tr>
                             <th style="width: 100px;">日期</th>
-                            \${TIME_SLOTS.map(slot => \`<th>\${slot.name} <br><span style="font-size: 12px; font-weight: normal; color: #71717a;">(\${slot.start}-\${slot.end})</span></th>\`).join('')}
+                            ${TIME_SLOTS.map(slot => `<th>${slot.name} <br><span style="font-size: 12px; font-weight: normal; color: #71717a;">(${slot.start}-${slot.end})</span></th>`).join('')}
                         </tr>
                     </thead>
                     <tbody>
-                        \${tableRows}
+                        ${tableRows}
                     </tbody>
                 </table>
             </body>
         </html>
-    \`;
+    `;
 
     const newWindow = window.open();
     if (newWindow) {
