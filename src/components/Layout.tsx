@@ -1,9 +1,11 @@
 
-import { NavLink, Outlet } from 'react-router-dom';
-import { Home, Calendar, Users, Clock, Syringe, CalendarOff, ClipboardPaste } from 'lucide-react';
+import { NavLink, Outlet, Link, useLocation } from 'react-router-dom';
+import { Home, Calendar, Users, Clock, Syringe, CalendarOff, ClipboardPaste, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 const Layout = () => {
+  const location = useLocation();
   const navItems = [
     { to: '/', label: '儀表板', icon: Home },
     { to: '/schedule', label: '排班表', icon: Calendar },
@@ -39,6 +41,16 @@ const Layout = () => {
         </nav>
       </aside>
       <main className="flex flex-1 flex-col gap-4 p-4 sm:py-4 sm:pl-64">
+        {location.pathname !== '/' && (
+          <div className="flex justify-end">
+            <Button asChild variant="outline">
+              <Link to="/">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                返回儀表板
+              </Link>
+            </Button>
+          </div>
+        )}
         <Outlet />
       </main>
     </div>
