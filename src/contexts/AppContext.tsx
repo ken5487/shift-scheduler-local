@@ -162,17 +162,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
         // When assigning, clear conflicting shifts for the newly assigned pharmacist
         if (pharmacistId && pharmacistId !== 'unassign') {
-            const supportStartTime = timeSlot === 'morning' ? toMinutes('08:00') : toMinutes('12:30');
-            const supportEndTime = timeSlot === 'morning' ? toMinutes('12:30') : toMinutes('18:00');
+            // 支援上午就是早班時段，支援下午就是午班時段
+            const targetSlotName = timeSlot === 'morning' ? '早班' : '午班';
             
             shifts.forEach(shift => {
-              const shiftStart = toMinutes(shift.startTime);
-              const shiftEnd = toMinutes(shift.endTime);
-              const shiftCenter = shiftStart + (shiftEnd - shiftStart) / 2;
-
-              const isShiftInSupportSlot = shiftCenter >= supportStartTime && shiftCenter < supportEndTime;
-
-              if (isShiftInSupportSlot && daySchedule.shifts[shift.id] === pharmacistId) {
+              // 找到對應時段的班別並清除該藥師的排班
+              if (shift.name === targetSlotName && daySchedule.shifts[shift.id] === pharmacistId) {
                 console.log(`清除衝突班表: ${shift.name} for pharmacist ${pharmacistId} on ${date}`);
                 delete daySchedule.shifts[shift.id];
               }
