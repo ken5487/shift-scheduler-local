@@ -14,6 +14,7 @@ import { AppProvider } from "./contexts/AppContext";
 import Leave from "./pages/Leave";
 import WorkAssignment from "./pages/WorkAssignment";
 import Support from "./pages/Support";
+import Dashboard from "./pages/Dashboard";
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,7 @@ const App = () => (
           <Routes>
             <Route element={<Layout />}>
               <Route path="/" element={<Index />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/staff" element={<Staff />} />
               <Route path="/shifts" element={<Shifts />} />
               <Route path="/schedule" element={<Schedule />} />

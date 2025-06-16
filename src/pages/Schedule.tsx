@@ -1,17 +1,17 @@
-
 import { useState } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-tw';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ChevronLeft, ChevronRight, TriangleAlert, Download, LifeBuoy } from 'lucide-react';
+import { ChevronLeft, ChevronRight, TriangleAlert, Download, LifeBuoy, MessageSquare } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Shift } from '@/lib/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { Pharmacist } from '@/lib/types';
+import { Textarea } from '@/components/ui/textarea';
 
 dayjs.locale('zh-tw');
 
@@ -39,13 +39,16 @@ const doTimesOverlap = (shift: Shift, slot: { start: string; end: string }) => {
 
 
 const Schedule = () => {
-  const { shifts, pharmacists, schedule, assignShift, isPharmacistOnLeave, supportNeeds, assignSupport } = useAppContext();
+  const { shifts, pharmacists, schedule, assignShift, isPharmacistOnLeave, supportNeeds, assignSupport, updateNotes } = useAppContext();
   const [currentDate, setCurrentDate] = useState(dayjs());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<dayjs.Dayjs | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<{ name: string; start: string; end: string; } | null>(null);
   const [isSupportDialogOpen, setIsSupportDialogOpen] = useState(false);
   const [selectedDayForSupport, setSelectedDayForSupport] = useState<dayjs.Dayjs | null>(null);
+  const [isNotesDialogOpen, setIsNotesDialogOpen] = useState(false);
+  const [selectedDayForNotes, setSelectedDayForNotes] = useState<dayjs.Dayjs | null>(null);
+  const [notesText, setNotesText] = useState('');
 
   const startOfMonth = currentDate.startOf('month');
   const endOfMonth = currentDate.endOf('month');
@@ -70,6 +73,22 @@ const Schedule = () => {
   const openSupportDialog = (day: dayjs.Dayjs) => {
     setSelectedDayForSupport(day);
     setIsSupportDialogOpen(true);
+  };
+  
+  const openNotesDialog = (day: dayjs.Dayjs) => {
+    const dateStr = day.format('YYYY-MM-DD');
+    const currentNotes = schedule[dateStr]?.notes || '';
+    setSelectedDayForNotes(day);
+    setNotesText(currentNotes);
+    setIsNotesDialogOpen(true);
+  };
+  
+  const handleSaveNotes = () => {
+    if (selectedDayForNotes) {
+      const dateStr = selectedDayForNotes.format('YYYY-MM-DD');
+      updateNotes(dateStr, notesText);
+      setIsNotesDialogOpen(false);
+    }
   };
   
   const shiftsForSelectedSlot = selectedSlot ? getShiftsForSlot(selectedSlot) : [];
@@ -185,6 +204,7 @@ const Schedule = () => {
                             <th style="width: 100px;">日期</th>
                             ${TIME_SLOTS.map(slot => `<th>${slot.name} <br><span style="font-size: 12px; font-weight: normal; color: #71717a;">(${slot.start}-${slot.end})</span></th>`).join('')}
                             <th style="width: 150px;">支援</th>
+                            <th style="width: 120px;">備註</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -238,6 +258,7 @@ const Schedule = () => {
                   <TableHead key={slot.name}>{slot.name} <span className="text-xs font-normal text-muted-foreground">({slot.start}-{slot.end})</span></TableHead>
                 ))}
                 <TableHead className="w-[150px]">支援</TableHead>
+                <TableHead className="w-[120px]">備註</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -439,6 +460,29 @@ const Schedule = () => {
                             <div className="flex items-center justify-center text-muted-foreground text-xs h-full">不適用</div>
                         )}
                     </TableCell>
+                    <TableCell className="align-top p-2">
+                        <div 
+                            className="flex flex-col gap-1 min-h-[60px] cursor-pointer hover:bg-yellow-50 p-1 rounded-md"
+                            onClick={() => openNotesDialog(day)}
+                        >
+                            <div className="font-semibold text-xs flex items-center gap-1 text-amber-700">
+                                <MessageSquare className="h-4 w-4" />
+                                <span>備註</span>
+                            </div>
+                            
+                            {(() => {
+                                const notes = dailySchedule.notes;
+                                if (!notes) {
+                                    return <div className="text-xs text-muted-foreground text-center pt-2">點擊新增</div>;
+                                }
+                                return (
+                                    <div className="text-xs text-gray-700 bg-yellow-50 p-2 rounded border-l-2 border-yellow-400">
+                                        {notes.length > 30 ? `${notes.substring(0, 30)}...` : notes}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    </TableCell>
                   </TableRow>
                 )
               })}
@@ -548,6 +592,32 @@ const Schedule = () => {
                     })}
                 </>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      <Dialog open={isNotesDialogOpen} onOpenChange={setIsNotesDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+               編輯 {selectedDayForNotes?.format('MM/DD (ddd)')} 備註
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Textarea
+              value={notesText}
+              onChange={(e) => setNotesText(e.target.value)}
+              placeholder="輸入當日備註..."
+              className="min-h-[120px]"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsNotesDialogOpen(false)}>
+              取消
+            </Button>
+            <Button onClick={handleSaveNotes}>
+              儲存備註
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

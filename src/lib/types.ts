@@ -23,6 +23,7 @@ export interface MonthlySchedule {
       morning?: (string | null)[];
       afternoon?: (string | null)[];
     };
+    notes?: string; // 新增備註欄位
   }
 }
 
@@ -36,4 +37,11 @@ export interface SupportNeed {
   dayOfWeek: number; // 1-5 for Mon-Fri
   timeSlot: 'morning' | 'afternoon';
   count: number;
+}
+
+export interface ScheduleIssue {
+  date: string;
+  type: 'understaffed' | 'conflict' | 'no_assignment';
+  description: string;
+  severity: 'high' | 'medium' | 'low';
 }

@@ -1,7 +1,6 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Pharmacist, Shift, MonthlySchedule, Leave, SupportNeed } from '@/lib/types';
+import { Pharmacist, Shift, MonthlySchedule, Leave, SupportNeed, ScheduleIssue } from '@/lib/types';
 import dayjs from 'dayjs';
 
 // --- 預設範例資料 ---
@@ -45,6 +44,8 @@ interface AppContextType {
   supportNeeds: SupportNeed[];
   updateSupportNeed: (dayOfWeek: number, timeSlot: 'morning' | 'afternoon', count: number) => void;
   assignSupport: (date: string, timeSlot: 'morning' | 'afternoon', pharmacistId: string, index: number) => void;
+  updateNotes: (date: string, notes: string) => void;
+  getScheduleIssues: (month: dayjs.Dayjs) => ScheduleIssue[];
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -172,6 +173,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
               const isShiftInSupportSlot = shiftCenter >= supportStartTime && shiftCenter < supportEndTime;
 
               if (isShiftInSupportSlot && daySchedule.shifts[shift.id] === pharmacistId) {
+                console.log(`清除衝突班表: ${shift.name} for pharmacist ${pharmacistId} on ${date}`);
                 delete daySchedule.shifts[shift.id];
               }
             });
@@ -180,10 +182,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         if (!daySchedule.support) daySchedule.support = {};
         if (!daySchedule.support[timeSlot]) daySchedule.support[timeSlot] = [];
         
-        // Update the assignment array, using null for empty slots
         daySchedule.support[timeSlot]![index] = pharmacistId === 'unassign' ? null : pharmacistId;
         
-        // Clean up object if empty
         const hasAssignments = daySchedule.support[timeSlot]!.some(p => p !== null);
         if (!hasAssignments) {
             delete daySchedule.support![timeSlot];
@@ -195,6 +195,88 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         newSchedule[date] = daySchedule;
         return newSchedule;
     });
+  };
+
+  const updateNotes = (date: string, notes: string) => {
+    setSchedule(prev => {
+      const newSchedule = { ...prev };
+      if (!newSchedule[date]) {
+        newSchedule[date] = { shifts: {} };
+      }
+      if (notes.trim()) {
+        newSchedule[date].notes = notes;
+      } else {
+        delete newSchedule[date].notes;
+      }
+      return newSchedule;
+    });
+  };
+
+  const getScheduleIssues = (month: dayjs.Dayjs): ScheduleIssue[] => {
+    const issues: ScheduleIssue[] = [];
+    const startOfMonth = month.startOf('month');
+    const endOfMonth = month.endOf('month');
+    let day = startOfMonth;
+
+    while(day.isBefore(endOfMonth) || day.isSame(endOfMonth, 'day')) {
+      const dateStr = day.format('YYYY-MM-DD');
+      const isSunday = day.day() === 0;
+      const isSaturday = day.day() === 6;
+      
+      if (!isSunday) {
+        const dailySchedule = schedule[dateStr];
+        
+        // 檢查是否完全沒有排班
+        if (!dailySchedule) {
+          issues.push({
+            date: dateStr,
+            type: 'no_assignment',
+            description: '尚未排班',
+            severity: 'high'
+          });
+        } else {
+          // 檢查週六人數不足
+          if (isSaturday) {
+            const workingFullTimers = pharmacists.filter(p => 
+              p.position === '正職' && !isPharmacistOnLeave(p.id, dateStr)
+            ).length;
+            
+            const supportPharmacists = Object.values(dailySchedule.shifts || {})
+              .filter(pId => {
+                const pharmacist = pharmacists.find(p => p.id === pId);
+                return pharmacist?.position === '兼職';
+              }).length;
+            
+            if (workingFullTimers + supportPharmacists < 3) {
+              issues.push({
+                date: dateStr,
+                type: 'understaffed',
+                description: `週六人數不足 (${workingFullTimers + supportPharmacists}/3)`,
+                severity: 'high'
+              });
+            }
+          }
+          
+          // 檢查休假衝突
+          Object.entries(dailySchedule.shifts || {}).forEach(([shiftId, pharmacistId]) => {
+            if (pharmacistId && isPharmacistOnLeave(pharmacistId, dateStr)) {
+              const pharmacist = pharmacists.find(p => p.id === pharmacistId);
+              const shift = shifts.find(s => s.id === shiftId);
+              issues.push({
+                date: dateStr,
+                type: 'conflict',
+                description: `${pharmacist?.name} 在 ${shift?.name} 但已請假`,
+                severity: 'high'
+              });
+            }
+          });
+        }
+      }
+      
+      day = day.add(1, 'day');
+    }
+    
+    return issues;
   };
 
   const updateSupportNeed = (dayOfWeek: number, timeSlot: 'morning' | 'afternoon', count: number) => {
@@ -242,7 +324,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       shifts, addShift, updateShift, deleteShift,
       schedule, setSchedule, assignShift,
       leave, addLeave, deleteLeave, isPharmacistOnLeave,
-      supportNeeds, updateSupportNeed, assignSupport
+      supportNeeds, updateSupportNeed, assignSupport,
+      updateNotes, getScheduleIssues
     }}>
       {children}
     </AppContext.Provider>
