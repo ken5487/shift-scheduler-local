@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Pharmacist, Shift, MonthlySchedule, Leave, SupportNeed } from '@/lib/types';
@@ -11,10 +12,10 @@ const defaultPharmacists: Pharmacist[] = [
 ];
 
 const defaultShifts: Shift[] = [
-  { id: uuidv4(), name: '早班', startTime: '08:30', endTime: '12:00', saturdayLeaveLimit: 1 },
-  { id: uuidv4(), name: '午班', startTime: '13:00', endTime: '17:30', saturdayLeaveLimit: 1 },
-  { id: uuidv4(), name: '晚班', startTime: '18:00', endTime: '22:00', saturdayLeaveLimit: 2 },
-  { id: uuidv4(), name: '全日班', startTime: '08:30', endTime: '17:30', saturdayLeaveLimit: 1 },
+  { id: uuidv4(), name: '早班', startTime: '08:30', endTime: '12:00' },
+  { id: uuidv4(), name: '午班', startTime: '13:00', endTime: '17:30' },
+  { id: uuidv4(), name: '晚班', startTime: '18:00', endTime: '22:00' },
+  { id: uuidv4(), name: '全日班', startTime: '08:30', endTime: '17:30' },
 ];
 
 const defaultSupportNeeds: SupportNeed[] = [
@@ -31,7 +32,7 @@ interface AppContextType {
   updatePharmacist: (pharmacist: Pharmacist) => void;
   deletePharmacist: (id: string) => void;
   shifts: Shift[];
-  addShift: (shift: Omit<Shift, 'id' | 'saturdayLeaveLimit'> & { saturdayLeaveLimit: number }) => void;
+  addShift: (shift: Omit<Shift, 'id'>) => void;
   updateShift: (shift: Partial<Shift> & { id: string }) => void;
   deleteShift: (id: string) => void;
   schedule: MonthlySchedule;
@@ -67,7 +68,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       localStorage.removeItem('saturdayLeaveLimits');
 
       setPharmacists(savedPharmacists ? JSON.parse(savedPharmacists) : defaultPharmacists);
-      setShifts(savedShifts ? JSON.parse(savedShifts) : defaultShifts);
+      
+      // Migration: remove saturdayLeaveLimit from existing shifts
+      const parsedShifts = savedShifts ? JSON.parse(savedShifts) : defaultShifts;
+      const cleanedShifts = parsedShifts.map((shift: any) => {
+        const { saturdayLeaveLimit, ...cleanShift } = shift;
+        return cleanShift;
+      });
+      setShifts(cleanedShifts);
+      
       setSchedule(savedSchedule ? JSON.parse(savedSchedule) : {});
       setLeave(savedLeave ? JSON.parse(savedLeave) : []);
       setSupportNeeds(savedSupportNeeds ? JSON.parse(savedSupportNeeds) : defaultSupportNeeds);
@@ -105,7 +114,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setPharmacists(pharmacists.filter(p => p.id !== id));
   };
 
-  const addShift = (shift: Omit<Shift, 'id' | 'saturdayLeaveLimit'> & { saturdayLeaveLimit: number }) => {
+  const addShift = (shift: Omit<Shift, 'id'>) => {
     setShifts([...shifts, { ...shift, id: uuidv4() }]);
   };
 
@@ -217,8 +226,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const addLeave = (pharmacistId: string, date: string) => {
     if (leave.some(l => l.pharmacistId === pharmacistId && l.date === date)) return;
     setLeave(prevLeave => [...prevLeave, { id: uuidv4(), pharmacistId, date }]);
-    // 之前會在這裡自動清除排班，現在我們移除這段邏輯。
-    // UI 將會負責顯示排班與休假的衝突。
   };
 
   const deleteLeave = (pharmacistId: string, date: string) => {

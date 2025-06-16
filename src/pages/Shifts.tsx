@@ -15,7 +15,7 @@ const Shifts = () => {
   const { shifts, addShift, updateShift, deleteShift } = useAppContext();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [currentShift, setCurrentShift] = useState<Shift | null>(null);
-  const [formData, setFormData] = useState({ name: '', startTime: '08:00', endTime: '16:00', saturdayLeaveLimit: 1 });
+  const [formData, setFormData] = useState({ name: '', startTime: '08:00', endTime: '16:00' });
 
   const openDialog = (shift: Shift | null = null) => {
     setCurrentShift(shift);
@@ -24,10 +24,9 @@ const Shifts = () => {
         name: shift.name,
         startTime: shift.startTime,
         endTime: shift.endTime,
-        saturdayLeaveLimit: shift.saturdayLeaveLimit,
       });
     } else {
-      setFormData({ name: '', startTime: '08:00', endTime: '16:00', saturdayLeaveLimit: 1 });
+      setFormData({ name: '', startTime: '08:00', endTime: '16:00' });
     }
     setIsDialogOpen(true);
   };
@@ -37,17 +36,11 @@ const Shifts = () => {
       toast.error('請輸入班型名稱');
       return;
     }
-    const limit = Number(formData.saturdayLeaveLimit);
-    if (isNaN(limit) || limit < 0) {
-      toast.error('請輸入有效的週六可休天數 (必須大於或等於 0)');
-      return;
-    }
 
     const shiftData = {
       name: formData.name,
       startTime: formData.startTime,
       endTime: formData.endTime,
-      saturdayLeaveLimit: limit
     };
 
     if (currentShift) {
@@ -77,7 +70,6 @@ const Shifts = () => {
                 <TableHead>班型名稱</TableHead>
                 <TableHead>開始時間</TableHead>
                 <TableHead>結束時間</TableHead>
-                <TableHead>週六可休天數</TableHead>
                 <TableHead className="text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
@@ -87,7 +79,6 @@ const Shifts = () => {
                   <TableCell className="font-medium">{shift.name}</TableCell>
                   <TableCell>{shift.startTime}</TableCell>
                   <TableCell>{shift.endTime}</TableCell>
-                  <TableCell>{shift.saturdayLeaveLimit}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => openDialog(shift)}>
                       <Edit className="h-4 w-4" />
@@ -120,18 +111,6 @@ const Shifts = () => {
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="endTime" className="text-right">結束時間</Label>
               <Input id="endTime" type="time" value={formData.endTime} onChange={(e) => setFormData({...formData, endTime: e.target.value})} className="col-span-3" />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="saturdayLeaveLimit" className="text-right">週六休假上限</Label>
-              <Input 
-                id="saturdayLeaveLimit"
-                type="number"
-                value={formData.saturdayLeaveLimit}
-                onChange={(e) => setFormData(prev => ({ ...prev, saturdayLeaveLimit: e.target.value === '' ? 0 : parseInt(e.target.value, 10) }))}
-                className="col-span-3"
-                min="0"
-                placeholder="例如: 1"
-              />
             </div>
           </div>
           <DialogFooter>
