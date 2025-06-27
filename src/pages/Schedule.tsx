@@ -94,39 +94,77 @@ const Schedule = () => {
   const shiftsForSelectedSlot = selectedSlot ? getShiftsForSlot(selectedSlot) : [];
   
   const handleExportCSV = () => {
-    const csvRows = [['日期', '星期', '時段', '班別', '藥師']];
+    const csvRows = [['日期', '早', '午', '晚', '休假', '備註']];
     const pharmacistMap = new Map(pharmacists.map(p => [p.id, p.name]));
-    const shiftMap = new Map(shifts.map(s => [s.id, s.name]));
 
     daysInMonth.forEach(day => {
         const dateStr = day.format('YYYY-MM-DD');
-        const dayOfWeek = day.format('ddd');
         const dailySchedule = { shifts: {}, ...(schedule[dateStr] || {}) };
         
         if (day.day() === 0) {
+            csvRows.push([day.format('MM/DD'), 'OFF', '', '', '', '']);
             return;
         }
         
+        // 收集各時段的藥師
+        const morningPharmacists = [];
+        const afternoonPharmacists = [];
+        const eveningPharmacists = [];
+        
+        // 從班表中收集藥師
         TIME_SLOTS.forEach(slot => {
-            if (day.day() === 6 && (slot.name === '午班' || slot.name === '晚班')) return;
-
             const relevantShifts = getShiftsForSlot(slot);
-            if (relevantShifts.length === 0) {
-                 csvRows.push([dateStr, dayOfWeek, slot.name, '無適用班型', '']);
-            } else {
-                relevantShifts.forEach(shift => {
-                    const pharmacistId = dailySchedule.shifts[shift.id];
-                    const pharmacistName = pharmacistId ? pharmacistMap.get(pharmacistId) || '未知藥師' : '未指派';
-                    csvRows.push([
-                        dateStr,
-                        dayOfWeek,
-                        slot.name,
-                        shift.name,
-                        pharmacistName,
-                    ]);
-                });
-            }
+            relevantShifts.forEach(shift => {
+                const pharmacistId = dailySchedule.shifts[shift.id];
+                if (pharmacistId) {
+                    const pharmacist = pharmacistMap.get(pharmacistId);
+                    if (slot.name === '早班') {
+                        morningPharmacists.push(pharmacist);
+                    } else if (slot.name === '午班') {
+                        afternoonPharmacists.push(pharmacist);
+                    } else if (slot.name === '晚班') {
+                        eveningPharmacists.push(pharmacist);
+                    }
+                }
+            });
         });
+        
+        // 添加支援人力
+        if (dailySchedule.support?.morning) {
+            dailySchedule.support.morning.forEach(pId => {
+                if (pId) {
+                    const pharmacist = pharmacistMap.get(pId);
+                    if (pharmacist && !morningPharmacists.includes(pharmacist)) {
+                        morningPharmacists.push(pharmacist);
+                    }
+                }
+            });
+        }
+        
+        if (dailySchedule.support?.afternoon) {
+            dailySchedule.support.afternoon.forEach(pId => {
+                if (pId) {
+                    const pharmacist = pharmacistMap.get(pId);
+                    if (pharmacist && !afternoonPharmacists.includes(pharmacist)) {
+                        afternoonPharmacists.push(pharmacist);
+                    }
+                }
+            });
+        }
+        
+        // 收集休假人員
+        const onLeaveToday = pharmacists
+            .filter(p => isPharmacistOnLeave(p.id, dateStr))
+            .map(p => `${p.name} 休`);
+        
+        csvRows.push([
+            day.format('MM/DD'),
+            morningPharmacists.join(' ') || '',
+            afternoonPharmacists.join(' ') || '',
+            day.day() === 6 ? '' : eveningPharmacists.join(' ') || '',
+            onLeaveToday.join(' ') || '',
+            dailySchedule.notes || ''
+        ]);
     });
 
     const csvContent = csvRows.map(e => e.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -152,33 +190,78 @@ const Schedule = () => {
         const isSunday = day.day() === 0;
         const isSaturday = day.day() === 6;
 
-        let cells = '';
         if (isSunday) {
-            cells = `<td colspan="${TIME_SLOTS.length}" style="text-align: center; color: #71717a; background-color: #f3f4f6;">週日公休</td>`;
-        } else if (!schedule[dateStr]) {
-            cells = `<td colspan="${TIME_SLOTS.length + 1}" style="text-align: center; color: #71717a;">未排班</td>`;
+            return `
+                <tr>
+                    <td style="font-weight: 500; color: #dc2626;">${day.format('MM/DD')}</td>
+                    <td style="text-align: center; color: #71717a; background-color: #f3f4f6; font-weight: bold;">OFF</td>
+                    <td style="background-color: #f3f4f6;"></td>
+                    <td style="background-color: #f3f4f6;"></td>
+                    <td style="background-color: #f3f4f6;"></td>
+                    <td style="background-color: #f3f4f6;"></td>
+                </tr>
+            `;
         }
-        else {
-            cells = TIME_SLOTS.map(slot => {
-                if (isSaturday && (slot.name === '午班' || slot.name === '晚班')) {
-                    return `<td style="background-color: #f5f5f5; text-align: center; color: #71717a;">無此時段</td>`;
+
+        // 收集各時段的藥師
+        const morningPharmacists = [];
+        const afternoonPharmacists = [];
+        const eveningPharmacists = [];
+        
+        // 從班表中收集藥師
+        TIME_SLOTS.forEach(slot => {
+            const relevantShifts = getShiftsForSlot(slot);
+            relevantShifts.forEach(shift => {
+                const pharmacistId = dailySchedule.shifts[shift.id];
+                if (pharmacistId) {
+                    const pharmacist = pharmacistMap.get(pharmacistId);
+                    if (slot.name === '早班') {
+                        morningPharmacists.push(pharmacist);
+                    } else if (slot.name === '午班') {
+                        afternoonPharmacists.push(pharmacist);
+                    } else if (slot.name === '晚班') {
+                        eveningPharmacists.push(pharmacist);
+                    }
                 }
-                const relevantShifts = getShiftsForSlot(slot);
-                const shiftContent = relevantShifts.map(shift => {
-                    const pharmacistId = dailySchedule.shifts[shift.id];
-                    const pharmacistName = pharmacistId ? pharmacistMap.get(pharmacistId) : '未指派';
-                    return `<div style="border: 1px solid #e5e7eb; border-radius: 0.375rem; padding: 4px; margin-bottom: 4px; background-color: #ffffff;">
-                                <strong style="font-weight: 600;">${shift.name}:</strong> ${pharmacistName}
-                            </div>`;
-                }).join('');
-                return `<td><div style="min-height: 40px;">${shiftContent || '<span style="color: #a1a1aa; font-size: 12px;">無適用班型</span>'}</div></td>`;
-            }).join('');
+            });
+        });
+        
+        // 添加支援人力
+        if (dailySchedule.support?.morning) {
+            dailySchedule.support.morning.forEach(pId => {
+                if (pId) {
+                    const pharmacist = pharmacistMap.get(pId);
+                    if (pharmacist && !morningPharmacists.includes(pharmacist)) {
+                        morningPharmacists.push(pharmacist);
+                    }
+                }
+            });
         }
+        
+        if (dailySchedule.support?.afternoon) {
+            dailySchedule.support.afternoon.forEach(pId => {
+                if (pId) {
+                    const pharmacist = pharmacistMap.get(pId);
+                    if (pharmacist && !afternoonPharmacists.includes(pharmacist)) {
+                        afternoonPharmacists.push(pharmacist);
+                    }
+                }
+            });
+        }
+        
+        // 收集休假人員
+        const onLeaveToday = pharmacists
+            .filter(p => isPharmacistOnLeave(p.id, dateStr))
+            .map(p => `${p.name} 休`);
 
         return `
             <tr>
-                <td style="font-weight: 500; vertical-align: top; ${isSaturday ? 'color: #2563eb;' : ''} ${isSunday ? 'color: #dc2626;' : ''}">${day.format('MM/DD')} (${day.format('ddd')})</td>
-                ${cells}
+                <td style="font-weight: 500; ${isSaturday ? 'color: #2563eb;' : ''}">${day.format('MM/DD')}</td>
+                <td>${morningPharmacists.join(' ') || ''}</td>
+                <td>${afternoonPharmacists.join(' ') || ''}</td>
+                <td>${isSaturday ? '' : eveningPharmacists.join(' ') || ''}</td>
+                <td>${onLeaveToday.join(' ') || ''}</td>
+                <td>${dailySchedule.notes || ''}</td>
             </tr>
         `;
     }).join('');
@@ -192,7 +275,7 @@ const Schedule = () => {
                     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; line-height: 1.5; }
                     table { width: 100%; border-collapse: collapse; }
                     th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; font-size: 14px; vertical-align: top; }
-                    th { background-color: #f9fafb; font-weight: 600; }
+                    th { background-color: #f9fafb; font-weight: 600; text-align: center; }
                     h1 { text-align: center; font-size: 24px; margin-bottom: 20px; }
                 </style>
             </head>
@@ -201,10 +284,12 @@ const Schedule = () => {
                 <table>
                     <thead>
                         <tr>
-                            <th style="width: 100px;">日期</th>
-                            ${TIME_SLOTS.map(slot => `<th>${slot.name} <br><span style="font-size: 12px; font-weight: normal; color: #71717a;">(${slot.start}-${slot.end})</span></th>`).join('')}
-                            <th style="width: 150px;">支援</th>
-                            <th style="width: 120px;">備註</th>
+                            <th style="width: 80px;">日期</th>
+                            <th>早</th>
+                            <th>午</th>
+                            <th>晚</th>
+                            <th>休假</th>
+                            <th>備註</th>
                         </tr>
                     </thead>
                     <tbody>
