@@ -163,11 +163,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         // When assigning, clear conflicting shifts for the newly assigned pharmacist
         if (pharmacistId && pharmacistId !== 'unassign') {
             // 支援上午就是早班時段，支援下午就是午班時段
-            const targetSlotName = timeSlot === 'morning' ? '早班' : '午班';
+            const targetSlots = timeSlot === 'morning' ? ['早班'] : ['午班'];
             
             shifts.forEach(shift => {
               // 找到對應時段的班別並清除該藥師的排班
-              if (shift.name === targetSlotName && daySchedule.shifts[shift.id] === pharmacistId) {
+              if (targetSlots.includes(shift.name) && daySchedule.shifts[shift.id] === pharmacistId) {
                 console.log(`清除衝突班表: ${shift.name} for pharmacist ${pharmacistId} on ${date}`);
                 delete daySchedule.shifts[shift.id];
               }
