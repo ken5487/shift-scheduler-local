@@ -356,24 +356,40 @@ const Schedule = () => {
                 const dayOfWeek = day.day();
                 const canHaveSupport = !isSunday && !isSaturday;
 
-                let saturdayWarning = null;
+                // 檢查各種排班問題並顯示警告
+                let scheduleWarnings = [];
+                
                 if (isSaturday) {
                     const workingFullTimersCount = pharmacists.filter(p => p.position === '正職' && !isPharmacistOnLeave(p.id, dateStr)).length;
-                    
-                    const earlySlot = TIME_SLOTS.find(slot => slot.name === '早班');
-                    const morningShifts = earlySlot ? getShiftsForSlot(earlySlot) : [];
+                    const supportPersonCount = localStorage.getItem(`${dateStr}_saturday_support`) ? 1 : 0;
 
-                    const assignedPharmacistIds = morningShifts.map(s => dailySchedule.shifts[s.id]).filter(Boolean) as string[];
-                    const assignedPartTimersCount = pharmacists.filter(p => p.position === '兼職' && assignedPharmacistIds.includes(p.id)).length;
-
-                    if (workingFullTimersCount + assignedPartTimersCount < 3) {
-                         saturdayWarning = (
-                            <div className="flex items-center gap-1 text-xs text-destructive mt-1 font-normal">
+                    if (workingFullTimersCount + supportPersonCount < 3) {
+                         scheduleWarnings.push(
+                            <div key="saturday" className="flex items-center gap-1 text-xs text-destructive mt-1 font-normal">
                                 <TriangleAlert className="h-3 w-3" />
                                 <span>早班人數不足 (應為3人)</span>
                             </div>
                         );
                     }
+                } else if (!isSunday) {
+                    // 檢查是否有人力不足問題
+                    TIME_SLOTS.forEach(slot => {
+                        const relevantShifts = getShiftsForSlot(slot);
+                        const assignedCount = relevantShifts.filter(shift => dailySchedule.shifts[shift.id]).length;
+                        const hasLeaveConflict = relevantShifts.some(shift => {
+                            const pharmacistId = dailySchedule.shifts[shift.id];
+                            return pharmacistId && isPharmacistOnLeave(pharmacistId, dateStr);
+                        });
+                        
+                        if (assignedCount === 0 || hasLeaveConflict) {
+                            scheduleWarnings.push(
+                                <div key={slot.name} className="flex items-center gap-1 text-xs text-orange-600 mt-1 font-normal">
+                                    <TriangleAlert className="h-3 w-3" />
+                                    <span>{slot.name}有問題</span>
+                                </div>
+                            );
+                        }
+                    });
                 }
                 
                 return (
@@ -383,7 +399,7 @@ const Schedule = () => {
                         <span className={cn(isSaturday && "text-blue-600 font-bold", isSunday && "text-red-600 font-bold")}>
                           {day.format('MM/DD')} ({day.format('ddd')})
                         </span>
-                        {saturdayWarning}
+                        {scheduleWarnings}
                         <div className="mt-1 space-y-1">
                           {pharmacistsOnLeaveToday.map(p => (
                             <div key={p.id} className="text-xs text-destructive-foreground bg-destructive/80 px-2 py-0.5 rounded-full w-fit">
@@ -418,6 +434,9 @@ const Schedule = () => {
                               
                               const assignedPartTimers = assignedPharmacists.filter(p => p.position === '兼職');
 
+                              // 如果有人休假，顯示空格供輸入支援藥師
+                              const hasLeave = workingFullTimers.length < pharmacists.filter(p => p.position === '正職').length;
+                              
                               return (
                                   <>
                                       {workingFullTimers.map(p => (
@@ -426,20 +445,26 @@ const Schedule = () => {
                                               <span className="text-muted-foreground"> (正職)</span>
                                           </div>
                                       ))}
-                                      {assignedPartTimers.map(p => {
-                                          const hasLeaveConflict = isPharmacistOnLeave(p.id, dateStr);
-                                          return (
-                                              <div key={p.id} className={cn(
-                                                  "text-xs p-1.5 rounded-md border",
-                                                  hasLeaveConflict ? "border-destructive bg-destructive/10" : "bg-green-50 border-green-200"
-                                              )}>
-                                                  <span className="font-semibold text-green-900">{p.name}</span>
-                                                  <span className="text-green-800"> (兼職支援)</span>
-                                                  {hasLeaveConflict && <div className="text-destructive font-semibold mt-1">休假中</div>}
-                                              </div>
-                                          );
-                                      })}
-                                      {(workingFullTimers.length + assignedPartTimers.length) === 0 && (
+                                      {/* 不顯示兼職人員，如果有人休假則顯示空格 */}
+                                      {hasLeave && (
+                                          <div className="text-xs p-1.5 rounded-md border border-dashed border-muted-foreground bg-muted/50">
+                                              <input 
+                                                  type="text" 
+                                                  placeholder="輸入支援藥師姓名"
+                                                  className="w-full bg-transparent border-none outline-none text-xs"
+                                                  onBlur={(e) => {
+                                                      const dateKey = `${dateStr}_saturday_support`;
+                                                      if (e.target.value.trim()) {
+                                                          localStorage.setItem(dateKey, e.target.value.trim());
+                                                      } else {
+                                                          localStorage.removeItem(dateKey);
+                                                      }
+                                                  }}
+                                                  defaultValue={localStorage.getItem(`${dateStr}_saturday_support`) || ''}
+                                              />
+                                          </div>
+                                      )}
+                                      {workingFullTimers.length === 0 && !hasLeave && (
                                           <div className="text-xs text-muted-foreground flex items-center justify-center h-full">無人上班</div>
                                       )}
                                   </>
@@ -472,20 +497,30 @@ const Schedule = () => {
                                   const pharmacistId = dailySchedule.shifts[shift.id];
                                   const pharmacist = pharmacists.find(p => p.id === pharmacistId);
                                   const hasLeaveConflict = !!pharmacistId && isPharmacistOnLeave(pharmacistId, dateStr);
+                                  
+                                  // 檢查此藥師是否已被指派到支援
+                                  const isInSupport = pharmacistId && dailySchedule.support && (
+                                    (slot.name === '早班' && dailySchedule.support.morning?.includes(pharmacistId)) ||
+                                    (slot.name === '午班' && dailySchedule.support.afternoon?.includes(pharmacistId))
+                                  );
+
+                                  // 如果藥師在休假，檢查是否需要 OPD 支援
+                                  const needsOPDSupport = hasLeaveConflict && !isInSupport;
 
                                   return (
                                     <div key={shift.id} className={cn(
                                       "text-xs p-1.5 rounded-md bg-background border",
-                                      hasLeaveConflict && "border-destructive"
+                                      hasLeaveConflict && "border-destructive",
+                                      isInSupport && "hidden"  // 如果在支援中就不顯示
                                     )}>
                                       <span className="font-semibold">{shift.name}:</span>{' '}
                                       <span className={pharmacist 
                                         ? (hasLeaveConflict ? 'text-destructive font-bold' : 'text-primary font-bold') 
                                         : 'text-muted-foreground'
                                       }>
-                                        {pharmacist ? pharmacist.name : '未指派'}
+                                        {needsOPDSupport ? '需OPD派人' : (pharmacist ? pharmacist.name : '未指派')}
                                       </span>
-                                      {hasLeaveConflict && <div className="text-destructive font-semibold mt-1">休假中</div>}
+                                      {hasLeaveConflict && !needsOPDSupport && <div className="text-destructive font-semibold mt-1">休假中</div>}
                                     </div>
                                   )
                                 }) : <div className="text-xs text-muted-foreground flex items-center justify-center h-full">無適用班型</div>}
@@ -505,12 +540,27 @@ const Schedule = () => {
                                     <span>支援人力</span>
                                 </div>
                                 
-                                {(() => {
+                                 {(() => {
                                     const supportAssignments = dailySchedule.support;
+                                    const morningNeed = supportNeeds.find(n => n.dayOfWeek === dayOfWeek && n.timeSlot === 'morning')?.count || 0;
+                                    const afternoonNeed = supportNeeds.find(n => n.dayOfWeek === dayOfWeek && n.timeSlot === 'afternoon')?.count || 0;
+                                    
+                                    // 檢查有沒有人請假
+                                    const hasLeaveToday = pharmacistsOnLeaveToday.length > 0;
+                                    
                                     if (!supportAssignments || (supportAssignments.morning?.filter(Boolean).length === 0 && supportAssignments.afternoon?.filter(Boolean).length === 0)) {
-                                       const morningNeed = supportNeeds.find(n => n.dayOfWeek === dayOfWeek && n.timeSlot === 'morning')?.count || 0;
-                                       const afternoonNeed = supportNeeds.find(n => n.dayOfWeek === dayOfWeek && n.timeSlot === 'afternoon')?.count || 0;
                                        if(morningNeed === 0 && afternoonNeed === 0) {
+                                        // 如果有人請假但不需要支援，顯示請假的人去支援
+                                        if (hasLeaveToday) {
+                                            return (
+                                                <div className="text-xs text-center pt-2">
+                                                    <div className="font-medium text-blue-700">當作請假者支援</div>
+                                                    <div className="text-muted-foreground">
+                                                        {pharmacistsOnLeaveToday.map(p => p.name).join(', ')}
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
                                         return <div className="text-xs text-muted-foreground text-center pt-2">無支援需求</div>
                                        }
                                     }
@@ -520,6 +570,10 @@ const Schedule = () => {
                                     const findPharmacist = (id: string) => pharmacists.find(p => p.id === id);
 
                                     if (morningSupport.length === 0 && afternoonSupport.length === 0) {
+                                        // 如果需要支援但沒有指派，且有人請假，顯示需要 OPD 派人
+                                        if (hasLeaveToday && (morningNeed > 0 || afternoonNeed > 0)) {
+                                            return <div className="text-xs text-center pt-2 text-orange-600 font-medium">需OPD派人</div>;
+                                        }
                                         return <div className="text-xs text-muted-foreground text-center pt-2">點擊指派</div>;
                                     }
 
