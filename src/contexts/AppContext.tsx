@@ -5,16 +5,15 @@ import dayjs from 'dayjs';
 
 // --- 預設範例資料 ---
 const defaultPharmacists: Pharmacist[] = [
-  { id: uuidv4(), name: '王藥師', position: '正職' },
-  { id: uuidv4(), name: '李藥師', position: '正職' },
-  { id: uuidv4(), name: '陳藥師', position: '兼職' },
+  { id: uuidv4(), name: '邱芳宜', position: '正職' },
+  { id: uuidv4(), name: '味佩君', position: '正職' },
+  { id: uuidv4(), name: '丁威凱', position: '正職' },
+  { id: uuidv4(), name: '翁菱磯', position: '兼職' },
 ];
 
 const defaultShifts: Shift[] = [
-  { id: uuidv4(), name: '早班', startTime: '08:30', endTime: '12:00' },
-  { id: uuidv4(), name: '午班', startTime: '13:00', endTime: '17:30' },
-  { id: uuidv4(), name: '晚班', startTime: '18:00', endTime: '22:00' },
-  { id: uuidv4(), name: '全日班', startTime: '08:30', endTime: '17:30' },
+  { id: uuidv4(), name: '早班', startTime: '08:30', endTime: '17:00' },
+  { id: uuidv4(), name: '早班2', startTime: '09:00', endTime: '17:30' },
 ];
 
 const defaultSupportNeeds: SupportNeed[] = [
