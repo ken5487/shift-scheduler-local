@@ -372,24 +372,41 @@ const Schedule = () => {
                         );
                     }
                 } else if (!isSunday) {
-                    // 檢查是否有人力不足問題
-                    TIME_SLOTS.forEach(slot => {
-                        const relevantShifts = getShiftsForSlot(slot);
-                        const assignedCount = relevantShifts.filter(shift => dailySchedule.shifts[shift.id]).length;
-                        const hasLeaveConflict = relevantShifts.some(shift => {
-                            const pharmacistId = dailySchedule.shifts[shift.id];
-                            return pharmacistId && isPharmacistOnLeave(pharmacistId, dateStr);
-                        });
-                        
-                        if (assignedCount === 0 || hasLeaveConflict) {
-                            scheduleWarnings.push(
-                                <div key={slot.name} className="flex items-center gap-1 text-xs text-orange-600 mt-1 font-normal">
-                                    <TriangleAlert className="h-3 w-3" />
-                                    <span>{slot.name}有問題</span>
-                                </div>
-                            );
-                        }
+                // 檢查是否有人力不足問題
+                TIME_SLOTS.forEach(slot => {
+                    const relevantShifts = getShiftsForSlot(slot);
+                    const assignedCount = relevantShifts.filter(shift => dailySchedule.shifts[shift.id]).length;
+                    const hasLeaveConflict = relevantShifts.some(shift => {
+                        const pharmacistId = dailySchedule.shifts[shift.id];
+                        return pharmacistId && isPharmacistOnLeave(pharmacistId, dateStr);
                     });
+                    
+                    // 檢查是否有藥師被安排支援但仍在班表上顯示
+                    const hasConflictWithSupport = relevantShifts.some(shift => {
+                        const pharmacistId = dailySchedule.shifts[shift.id];
+                        if (!pharmacistId) return false;
+                        
+                        // 檢查這個藥師是否同時被安排支援
+                        const isInSupport = dailySchedule.support && (
+                            (slot.name === '早班' && dailySchedule.support.morning?.includes(pharmacistId)) ||
+                            (slot.name === '午班' && dailySchedule.support.afternoon?.includes(pharmacistId))
+                        );
+                        
+                        // 如果藥師在休假且被安排支援，不應顯示班表問題
+                        const isOnLeaveAndInSupport = isPharmacistOnLeave(pharmacistId, dateStr) && isInSupport;
+                        
+                        return !isOnLeaveAndInSupport && (assignedCount === 0 || (hasLeaveConflict && !isInSupport));
+                    });
+                    
+                    if (hasConflictWithSupport) {
+                        scheduleWarnings.push(
+                            <div key={slot.name} className="flex items-center gap-1 text-xs text-orange-600 mt-1 font-normal">
+                                <TriangleAlert className="h-3 w-3" />
+                                <span>{slot.name}有問題</span>
+                            </div>
+                        );
+                    }
+                });
                 }
                 
                 return (
@@ -545,7 +562,7 @@ const Schedule = () => {
                                     const morningNeed = supportNeeds.find(n => n.dayOfWeek === dayOfWeek && n.timeSlot === 'morning')?.count || 0;
                                     const afternoonNeed = supportNeeds.find(n => n.dayOfWeek === dayOfWeek && n.timeSlot === 'afternoon')?.count || 0;
                                     
-                                    // 檢查有沒有人請假
+                                     // 檢查有沒有人請假
                                     const hasLeaveToday = pharmacistsOnLeaveToday.length > 0;
                                     
                                     if (!supportAssignments || (supportAssignments.morning?.filter(Boolean).length === 0 && supportAssignments.afternoon?.filter(Boolean).length === 0)) {
@@ -562,6 +579,27 @@ const Schedule = () => {
                                             );
                                         }
                                         return <div className="text-xs text-muted-foreground text-center pt-2">無支援需求</div>
+                                       } else {
+                                           // 如果需要支援但沒有人被指派
+                                           if (hasLeaveToday) {
+                                               // 有人請假且需要支援，檢查請假的人是否已被指派為支援
+                                               const leavePharmacistIds = pharmacistsOnLeaveToday.map(p => p.id);
+                                               const hasLeavePharmacistInSupport = 
+                                                   (morningNeed > 0 && supportAssignments?.morning?.some(pId => leavePharmacistIds.includes(pId || ''))) ||
+                                                   (afternoonNeed > 0 && supportAssignments?.afternoon?.some(pId => leavePharmacistIds.includes(pId || '')));
+                                               
+                                               if (!hasLeavePharmacistInSupport) {
+                                                   return (
+                                                       <div className="text-xs text-center pt-2">
+                                                           <div className="font-medium text-blue-700">當作請假者支援</div>
+                                                           <div className="text-muted-foreground">
+                                                               {pharmacistsOnLeaveToday.map(p => p.name).join(', ')}
+                                                           </div>
+                                                       </div>
+                                                   );
+                                               }
+                                           }
+                                           return <div className="text-xs text-muted-foreground text-center pt-2">點擊指派</div>;
                                        }
                                     }
 

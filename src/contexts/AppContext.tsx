@@ -17,11 +17,18 @@ const defaultShifts: Shift[] = [
 ];
 
 const defaultSupportNeeds: SupportNeed[] = [
-    // Monday to Friday, morning and afternoon, default 0
-    ...Array.from({ length: 5 }, (_, i) => i + 1).flatMap(day => ([
-        { dayOfWeek: day, timeSlot: 'morning' as const, count: 0 },
-        { dayOfWeek: day, timeSlot: 'afternoon' as const, count: 0 },
-    ]))
+    // Monday to Friday, morning and afternoon
+    // Monday (1) and Thursday (4) need 1 support person for morning
+    { dayOfWeek: 1, timeSlot: 'morning' as const, count: 1 }, // Monday morning
+    { dayOfWeek: 1, timeSlot: 'afternoon' as const, count: 0 }, // Monday afternoon
+    { dayOfWeek: 2, timeSlot: 'morning' as const, count: 0 }, // Tuesday morning
+    { dayOfWeek: 2, timeSlot: 'afternoon' as const, count: 0 }, // Tuesday afternoon
+    { dayOfWeek: 3, timeSlot: 'morning' as const, count: 0 }, // Wednesday morning
+    { dayOfWeek: 3, timeSlot: 'afternoon' as const, count: 0 }, // Wednesday afternoon
+    { dayOfWeek: 4, timeSlot: 'morning' as const, count: 1 }, // Thursday morning
+    { dayOfWeek: 4, timeSlot: 'afternoon' as const, count: 0 }, // Thursday afternoon
+    { dayOfWeek: 5, timeSlot: 'morning' as const, count: 0 }, // Friday morning
+    { dayOfWeek: 5, timeSlot: 'afternoon' as const, count: 0 }, // Friday afternoon
 ];
 
 interface AppContextType {
