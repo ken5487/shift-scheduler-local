@@ -18,15 +18,15 @@ const defaultShifts: Shift[] = [
 
 const defaultSupportNeeds: SupportNeed[] = [
     // Monday to Friday, morning and afternoon
-    // Monday (1) and Thursday (4) need 1 support person for morning
-    { dayOfWeek: 1, timeSlot: 'morning' as const, count: 1 }, // Monday morning
-    { dayOfWeek: 1, timeSlot: 'afternoon' as const, count: 0 }, // Monday afternoon
+    // Monday (1) and Thursday (4) need 1 support person for evening (1800-2200)
+    { dayOfWeek: 1, timeSlot: 'morning' as const, count: 0 }, // Monday morning
+    { dayOfWeek: 1, timeSlot: 'afternoon' as const, count: 1 }, // Monday evening (1800-2200)
     { dayOfWeek: 2, timeSlot: 'morning' as const, count: 0 }, // Tuesday morning
-    { dayOfWeek: 2, timeSlot: 'afternoon' as const, count: 0 }, // Tuesday afternoon
+    { dayOfWeek: 2, timeSlot: 'afternoon' as const, count: 0 }, // Tuesday afternoon (no evening shift)
     { dayOfWeek: 3, timeSlot: 'morning' as const, count: 0 }, // Wednesday morning
     { dayOfWeek: 3, timeSlot: 'afternoon' as const, count: 0 }, // Wednesday afternoon
-    { dayOfWeek: 4, timeSlot: 'morning' as const, count: 1 }, // Thursday morning
-    { dayOfWeek: 4, timeSlot: 'afternoon' as const, count: 0 }, // Thursday afternoon
+    { dayOfWeek: 4, timeSlot: 'morning' as const, count: 0 }, // Thursday morning
+    { dayOfWeek: 4, timeSlot: 'afternoon' as const, count: 1 }, // Thursday evening (1800-2200)
     { dayOfWeek: 5, timeSlot: 'morning' as const, count: 0 }, // Friday morning
     { dayOfWeek: 5, timeSlot: 'afternoon' as const, count: 0 }, // Friday afternoon
 ];
@@ -179,8 +179,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
         // When assigning, clear conflicting shifts for the newly assigned pharmacist
         if (pharmacistId && pharmacistId !== 'unassign') {
-            // 支援上午就是早班時段，支援下午就是午班時段
-            const targetSlots = timeSlot === 'morning' ? ['早班'] : ['午班'];
+            // 支援上午就是早班時段，支援下午就是晚班時段
+            const targetSlots = timeSlot === 'morning' ? ['早班'] : ['晚班'];
             
             shifts.forEach(shift => {
               // 找到對應時段的班別並清除該藥師的排班

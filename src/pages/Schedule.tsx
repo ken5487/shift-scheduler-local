@@ -123,15 +123,16 @@ const Schedule = () => {
   const shiftsForSelectedSlot = selectedSlot ? getShiftsForSlot(selectedSlot) : [];
   
   const handleExportCSV = () => {
-    const csvRows = [['日期', '早', '午', '晚', '休假', '備註']];
+    const csvRows = [['日期', '早班', '午班', '晚班', '支援人員', '休假人員', '備註事件']];
     const pharmacistMap = new Map(pharmacists.map(p => [p.id, p.name]));
 
     daysInMonth.forEach(day => {
         const dateStr = day.format('YYYY-MM-DD');
         const dailySchedule = { shifts: {}, ...(schedule[dateStr] || {}) };
+        const isTuesday = day.day() === 2;
         
         if (day.day() === 0) {
-            csvRows.push([day.format('MM/DD'), 'OFF', '', '', '', '']);
+            csvRows.push([day.format('MM/DD'), 'OFF', '', '', '', '', '']);
             return;
         }
         
@@ -147,25 +148,32 @@ const Schedule = () => {
                 const pharmacistId = dailySchedule.shifts[shift.id];
                 if (pharmacistId) {
                     const pharmacist = pharmacistMap.get(pharmacistId);
-                    if (slot.name === '早班') {
-                        morningPharmacists.push(pharmacist);
-                    } else if (slot.name === '午班') {
-                        afternoonPharmacists.push(pharmacist);
-                    } else if (slot.name === '晚班') {
-                        eveningPharmacists.push(pharmacist);
+                    // 檢查是否被指派到支援，如果是就不在班表顯示
+                    const isInSupport = dailySchedule.support && (
+                        (slot.name === '早班' && dailySchedule.support.morning?.includes(pharmacistId)) ||
+                        (slot.name === '晚班' && dailySchedule.support.afternoon?.includes(pharmacistId))
+                    );
+                    
+                    if (!isInSupport) {
+                        if (slot.name === '早班') {
+                            morningPharmacists.push(pharmacist);
+                        } else if (slot.name === '午班') {
+                            afternoonPharmacists.push(pharmacist);
+                        } else if (slot.name === '晚班' && !isTuesday) { // 週二無晚班
+                            eveningPharmacists.push(pharmacist);
+                        }
                     }
                 }
             });
         });
         
-        // 添加支援人力
+        // 收集支援人員
+        const supportPersonnel = [];
         if (dailySchedule.support?.morning) {
             dailySchedule.support.morning.forEach(pId => {
                 if (pId) {
                     const pharmacist = pharmacistMap.get(pId);
-                    if (pharmacist && !morningPharmacists.includes(pharmacist)) {
-                        morningPharmacists.push(pharmacist);
-                    }
+                    if (pharmacist) supportPersonnel.push(`${pharmacist}(早班支援)`);
                 }
             });
         }
@@ -174,9 +182,7 @@ const Schedule = () => {
             dailySchedule.support.afternoon.forEach(pId => {
                 if (pId) {
                     const pharmacist = pharmacistMap.get(pId);
-                    if (pharmacist && !afternoonPharmacists.includes(pharmacist)) {
-                        afternoonPharmacists.push(pharmacist);
-                    }
+                    if (pharmacist) supportPersonnel.push(`${pharmacist}(晚班支援)`);
                 }
             });
         }
@@ -184,15 +190,21 @@ const Schedule = () => {
         // 收集休假人員
         const onLeaveToday = pharmacists
             .filter(p => isPharmacistOnLeave(p.id, dateStr))
-            .map(p => `${p.name} 休`);
+            .map(p => p.name);
+        
+        // 收集備註事件
+        const dayEvents = events
+            .filter(event => event.date === dateStr)
+            .map(event => event.name);
         
         csvRows.push([
             day.format('MM/DD'),
             morningPharmacists.join(' ') || '',
             afternoonPharmacists.join(' ') || '',
-            day.day() === 6 ? '' : eveningPharmacists.join(' ') || '',
+            isTuesday ? '延長白班' : (day.day() === 6 ? '' : eveningPharmacists.join(' ') || ''),
+            supportPersonnel.join(' ') || '',
             onLeaveToday.join(' ') || '',
-            dailySchedule.notes || ''
+            [...dayEvents, dailySchedule.notes].filter(Boolean).join(' | ') || ''
         ]);
     });
 
@@ -391,9 +403,9 @@ const Schedule = () => {
                 // 檢查各種排班問題並顯示警告
                 let scheduleWarnings = [];
                 
-                if (isSaturday) {
+                        if (isSaturday) {
                     const workingFullTimersCount = pharmacists.filter(p => p.position === '正職' && !isPharmacistOnLeave(p.id, dateStr)).length;
-                    const supportPersonCount = localStorage.getItem(`${dateStr}_saturday_support`) ? 1 : 0;
+                    const supportPersonCount = (dailySchedule.support?.morning?.filter(Boolean).length || 0) + (dailySchedule.support?.afternoon?.filter(Boolean).length || 0);
 
                     if (workingFullTimersCount + supportPersonCount < 3) {
                          scheduleWarnings.push(
@@ -421,7 +433,7 @@ const Schedule = () => {
                         // 檢查這個藥師是否同時被安排支援
                         const isInSupport = dailySchedule.support && (
                             (slot.name === '早班' && dailySchedule.support.morning?.includes(pharmacistId)) ||
-                            (slot.name === '午班' && dailySchedule.support.afternoon?.includes(pharmacistId))
+                            (slot.name === '晚班' && dailySchedule.support.afternoon?.includes(pharmacistId))
                         );
                         
                         // 如果藥師在休假且被安排支援，不應顯示班表問題
@@ -581,6 +593,24 @@ const Schedule = () => {
                       </>
                     ) : (
                       TIME_SLOTS.map(slot => {
+                        // 週二沒有晚班，顯示為白班延長
+                        const isTuesdayEvening = day.day() === 2 && slot.name === '晚班';
+                        
+                        if (isTuesdayEvening) {
+                          return (
+                            <TableCell key={slot.name} className="align-top p-2">
+                              <div className="flex flex-col gap-1 min-h-[60px]">
+                                <div className="text-xs font-semibold text-blue-600 mb-1">
+                                  延長白班 (09:00-17:30)
+                                </div>
+                                <div className="text-xs text-muted-foreground bg-blue-50 p-2 rounded border">
+                                  晚班人員改為白班
+                                </div>
+                              </div>
+                            </TableCell>
+                          );
+                        }
+                        
                         if (isSaturday && (slot.name === '午班' || slot.name === '晚班')) {
                           return (
                             <TableCell key={slot.name} className="align-top p-2 bg-muted/40">
@@ -590,6 +620,7 @@ const Schedule = () => {
                             </TableCell>
                           );
                         }
+                        
                         const relevantShifts = getShiftsForSlot(slot);
                         return (
                           <TableCell key={slot.name} className="align-top cursor-pointer hover:bg-muted/50 p-2" onClick={() => openAssignmentDialog(day, slot)}>
@@ -602,26 +633,26 @@ const Schedule = () => {
                                   // 檢查此藥師是否已被指派到支援
                                   const isInSupport = pharmacistId && dailySchedule.support && (
                                     (slot.name === '早班' && dailySchedule.support.morning?.includes(pharmacistId)) ||
-                                    (slot.name === '午班' && dailySchedule.support.afternoon?.includes(pharmacistId))
+                                    (slot.name === '晚班' && dailySchedule.support.afternoon?.includes(pharmacistId))
                                   );
 
-                                  // 如果藥師在休假，檢查是否需要 OPD 支援
-                                  const needsOPDSupport = hasLeaveConflict && !isInSupport;
+                                  // 如果藥師在休假且不在支援，不顯示警告
+                                  const shouldHide = hasLeaveConflict && !isInSupport;
 
                                   return (
                                     <div key={shift.id} className={cn(
                                       "text-xs p-1.5 rounded-md bg-background border",
-                                      hasLeaveConflict && "border-destructive",
+                                      hasLeaveConflict && !isInSupport && "border-destructive",
                                       isInSupport && "hidden"  // 如果在支援中就不顯示
                                     )}>
                                       <span className="font-semibold">{shift.name}:</span>{' '}
                                       <span className={pharmacist 
-                                        ? (hasLeaveConflict ? 'text-destructive font-bold' : 'text-primary font-bold') 
+                                        ? (shouldHide ? 'text-destructive font-bold' : 'text-primary font-bold') 
                                         : 'text-muted-foreground'
                                       }>
-                                        {needsOPDSupport ? '需OPD派人' : (pharmacist ? pharmacist.name : '未指派')}
+                                        {pharmacist ? pharmacist.name : '未指派'}
                                       </span>
-                                      {hasLeaveConflict && !needsOPDSupport && <div className="text-destructive font-semibold mt-1">休假中</div>}
+                                      {shouldHide && <div className="text-destructive font-semibold mt-1">休假中</div>}
                                     </div>
                                   )
                                 }) : <div className="text-xs text-muted-foreground flex items-center justify-center h-full">無適用班型</div>}
@@ -646,11 +677,12 @@ const Schedule = () => {
                                     const morningNeed = supportNeeds.find(n => n.dayOfWeek === dayOfWeek && n.timeSlot === 'morning')?.count || 0;
                                     const afternoonNeed = supportNeeds.find(n => n.dayOfWeek === dayOfWeek && n.timeSlot === 'afternoon')?.count || 0;
                                     
-                                     // 檢查有沒有人請假
+                                     // 檢查有沒有人請假且當天支援需求
                                     const hasLeaveToday = pharmacistsOnLeaveToday.length > 0;
+                                    const needsSupport = morningNeed > 0 || afternoonNeed > 0;
                                     
                                     if (!supportAssignments || (supportAssignments.morning?.filter(Boolean).length === 0 && supportAssignments.afternoon?.filter(Boolean).length === 0)) {
-                                       if(morningNeed === 0 && afternoonNeed === 0) {
+                                       if(!needsSupport) {
                                         // 如果有人請假但不需要支援，顯示請假的人去支援
                                         if (hasLeaveToday) {
                                             return (
@@ -691,9 +723,9 @@ const Schedule = () => {
                                     const afternoonSupport = supportAssignments?.afternoon?.filter(Boolean) || [];
                                     const findPharmacist = (id: string) => pharmacists.find(p => p.id === id);
 
-                                    if (morningSupport.length === 0 && afternoonSupport.length === 0) {
+                                     if (morningSupport.length === 0 && afternoonSupport.length === 0) {
                                         // 如果需要支援但沒有指派，且有人請假，顯示需要 OPD 派人
-                                        if (hasLeaveToday && (morningNeed > 0 || afternoonNeed > 0)) {
+                                        if (hasLeaveToday && needsSupport) {
                                             return <div className="text-xs text-center pt-2 text-orange-600 font-medium">需OPD派人</div>;
                                         }
                                         return <div className="text-xs text-muted-foreground text-center pt-2">點擊指派</div>;
@@ -703,13 +735,13 @@ const Schedule = () => {
                                         <>
                                             {morningSupport.length > 0 && (
                                                 <div className="text-xs mt-1">
-                                                    <span className="font-medium">上午: </span>
+                                                    <span className="font-medium">早班支援: </span>
                                                     {morningSupport.map(pId => findPharmacist(pId)?.name).join(', ')}
                                                 </div>
                                             )}
-                                            {afternoonSupport.length > 0 && (
+                                             {afternoonSupport.length > 0 && (
                                                 <div className="text-xs">
-                                                    <span className="font-medium">下午: </span>
+                                                    <span className="font-medium">晚班支援: </span>
                                                     {afternoonSupport.map(pId => findPharmacist(pId)?.name).join(', ')}
                                                 </div>
                                             )}
@@ -818,7 +850,7 @@ const Schedule = () => {
 
                         return (
                             <div key={timeSlot}>
-                                <h3 className="font-semibold mb-3 border-b pb-2">{timeSlot === 'morning' ? '上午支援' : '下午支援'} ({need.count}人)</h3>
+                                <h3 className="font-semibold mb-3 border-b pb-2">{timeSlot === 'morning' ? '早班支援' : '晚班支援 (1800-2200)'} ({need.count}人)</h3>
                                 <div className="flex flex-col gap-3">
                                     {Array.from({ length: need.count }).map((_, index) => (
                                         <div key={index} className="grid grid-cols-4 items-center gap-4">
@@ -882,6 +914,12 @@ const Schedule = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {showEventsManager && (
+        <div className="mt-4">
+          <EventsManager currentMonth={currentDate} onEventDrop={handleEventDrop} />
+        </div>
+      )}
     </div>
   );
 };
