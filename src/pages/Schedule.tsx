@@ -141,31 +141,48 @@ const Schedule = () => {
         const afternoonPharmacists = [];
         const eveningPharmacists = [];
         
-        // 從班表中收集藥師
-        TIME_SLOTS.forEach(slot => {
-            const relevantShifts = getShiftsForSlot(slot);
-            relevantShifts.forEach(shift => {
-                const pharmacistId = dailySchedule.shifts[shift.id];
-                if (pharmacistId) {
-                    const pharmacist = pharmacistMap.get(pharmacistId);
-                    // 檢查是否被指派到支援，如果是就不在班表顯示
-                    const isInSupport = dailySchedule.support && (
-                        (slot.name === '早班' && dailySchedule.support.morning?.includes(pharmacistId)) ||
-                        (slot.name === '晚班' && dailySchedule.support.afternoon?.includes(pharmacistId))
-                    );
-                    
-                    if (!isInSupport) {
-                        if (slot.name === '早班') {
-                            morningPharmacists.push(pharmacist);
-                        } else if (slot.name === '午班') {
-                            afternoonPharmacists.push(pharmacist);
-                        } else if (slot.name === '晚班' && !isTuesday) { // 週二無晚班
-                            eveningPharmacists.push(pharmacist);
+        if (day.day() === 6) { // 週六特殊處理
+            // 08:30-12:30 的兩位藥師
+            if (dailySchedule.support?.morning) {
+                dailySchedule.support.morning.slice(0, 2).forEach(pId => {
+                    if (pId) {
+                        const pharmacist = pharmacistMap.get(pId);
+                        if (pharmacist) morningPharmacists.push(pharmacist);
+                    }
+                });
+            }
+            // 09:00-13:00 的一位藥師
+            if (dailySchedule.support?.afternoon?.[0]) {
+                const pharmacist = pharmacistMap.get(dailySchedule.support.afternoon[0]);
+                if (pharmacist) afternoonPharmacists.push(pharmacist);
+            }
+        } else {
+            // 從班表中收集藥師
+            TIME_SLOTS.forEach(slot => {
+                const relevantShifts = getShiftsForSlot(slot);
+                relevantShifts.forEach(shift => {
+                    const pharmacistId = dailySchedule.shifts[shift.id];
+                    if (pharmacistId) {
+                        const pharmacist = pharmacistMap.get(pharmacistId);
+                        // 檢查是否被指派到支援，如果是就不在班表顯示
+                        const isInSupport = dailySchedule.support && (
+                            (slot.name === '早班' && dailySchedule.support.morning?.includes(pharmacistId)) ||
+                            (slot.name === '晚班' && dailySchedule.support.afternoon?.includes(pharmacistId))
+                        );
+                        
+                        if (!isInSupport) {
+                            if (slot.name === '早班') {
+                                morningPharmacists.push(pharmacist);
+                            } else if (slot.name === '午班') {
+                                afternoonPharmacists.push(pharmacist);
+                            } else if (slot.name === '晚班' && !isTuesday) { // 週二無晚班
+                                eveningPharmacists.push(pharmacist);
+                            }
                         }
                     }
-                }
+                });
             });
-        });
+        }
         
         // 收集支援人員
         const supportPersonnel = [];
@@ -197,15 +214,27 @@ const Schedule = () => {
             .filter(event => event.date === dateStr)
             .map(event => event.name);
         
-        csvRows.push([
-            day.format('MM/DD'),
-            morningPharmacists.join(' ') || '',
-            afternoonPharmacists.join(' ') || '',
-            isTuesday ? '延長白班' : (day.day() === 6 ? '' : eveningPharmacists.join(' ') || ''),
-            supportPersonnel.join(' ') || '',
-            onLeaveToday.join(' ') || '',
-            [...dayEvents, dailySchedule.notes].filter(Boolean).join(' | ') || ''
-        ]);
+        if (day.day() === 6) { // 週六特殊格式
+            csvRows.push([
+                day.format('MM/DD'),
+                `0830-1230 ${morningPharmacists.join(' ')}`,
+                `0900-1300 ${afternoonPharmacists.join(' ')}`,
+                '',
+                supportPersonnel.join(' ') || '',
+                onLeaveToday.join(' ') || '',
+                [...dayEvents, dailySchedule.notes].filter(Boolean).join(' | ') || ''
+            ]);
+        } else {
+            csvRows.push([
+                day.format('MM/DD'),
+                morningPharmacists.join(' ') || '',
+                afternoonPharmacists.join(' ') || '',
+                isTuesday ? '延長白班' : eveningPharmacists.join(' ') || '',
+                supportPersonnel.join(' ') || '',
+                onLeaveToday.join(' ') || '',
+                [...dayEvents, dailySchedule.notes].filter(Boolean).join(' | ') || ''
+            ]);
+        }
     });
 
     const csvContent = csvRows.map(e => e.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -503,55 +532,34 @@ const Schedule = () => {
                             <div className="text-xs font-semibold text-blue-600 mb-1">
                               早班1 & 早班2 (08:30-12:30)
                             </div>
-                            {(() => {
-                              const workingFullTimers = pharmacists.filter(p => p.position === '正職' && !isPharmacistOnLeave(p.id, dateStr));
-                              const fullTimeCount = pharmacists.filter(p => p.position === '正職').length;
-                              const hasLeave = workingFullTimers.length < fullTimeCount;
-                              const slotsNeeded = 3 - workingFullTimers.length;
-                              
-                              return (
-                                <>
-                                  {workingFullTimers.map(p => (
-                                    <div key={p.id} className="text-xs p-1.5 rounded-md bg-background border">
-                                      <span className="font-semibold">{p.name}</span>
-                                      <span className="text-muted-foreground"> (正職)</span>
-                                    </div>
-                                  ))}
-                                  
-                                  {/* 下拉選單填補空缺 */}
-                                  {Array.from({ length: slotsNeeded }, (_, index) => (
-                                    <Select 
-                                      key={`support-${index}`}
-                                      value={dailySchedule.support?.morning?.[index] || ''}
-                                      onValueChange={(value) => {
-                                        if (value === 'unassign') {
-                                          assignSupport(dateStr, 'morning', 'unassign', index);
-                                        } else {
-                                          assignSupport(dateStr, 'morning', value, index);
-                                        }
-                                      }}
-                                    >
-                                      <SelectTrigger className="h-8 text-xs">
-                                        <SelectValue placeholder="選擇支援藥師" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="unassign">清除指派</SelectItem>
-                                        {pharmacists
-                                          .filter(p => 
-                                            p.position === 'OPD支援' || 
-                                            (p.position === '兼職' && !isPharmacistOnLeave(p.id, dateStr))
-                                          )
-                                          .map(p => (
-                                            <SelectItem key={p.id} value={p.id}>
-                                              {p.name} ({p.position})
-                                            </SelectItem>
-                                          ))}
-                                      </SelectContent>
-                                    </Select>
-                                  ))}
-                                </>
-                              );
-                            })()}
+                            {/* 所有週六位置都使用下拉選單 */}
+                            {Array.from({ length: 2 }, (_, index) => (
+                              <Select 
+                                key={`morning-${index}`}
+                                value={dailySchedule.support?.morning?.[index] || ''}
+                                onValueChange={(value) => {
+                                  if (value === 'unassign') {
+                                    assignSupport(dateStr, 'morning', 'unassign', index);
+                                  } else {
+                                    assignSupport(dateStr, 'morning', value, index);
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="h-8 text-xs">
+                                  <SelectValue placeholder={`選擇藥師 ${index + 1}`} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="unassign">清除指派</SelectItem>
+                                  {pharmacists
+                                    .filter(p => !isPharmacistOnLeave(p.id, dateStr))
+                                    .map(p => (
+                                      <SelectItem key={p.id} value={p.id}>
+                                        {p.name} ({p.position})
+                                      </SelectItem>
+                                    ))}
+                                </SelectContent>
+                              </Select>
+                            ))}
                           </div>
                         </TableCell>
                         <TableCell className="align-top p-2">

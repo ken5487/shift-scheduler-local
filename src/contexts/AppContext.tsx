@@ -14,21 +14,21 @@ const defaultPharmacists: Pharmacist[] = [
 const defaultShifts: Shift[] = [
   { id: uuidv4(), name: '早班', startTime: '08:30', endTime: '17:00' },
   { id: uuidv4(), name: '早班2', startTime: '09:00', endTime: '17:30' },
+  { id: uuidv4(), name: '晚班', startTime: '18:00', endTime: '22:00' },
 ];
 
 const defaultSupportNeeds: SupportNeed[] = [
-    // Monday to Friday, morning and afternoon
-    // Monday (1) and Thursday (4) need 1 support person for evening (1800-2200)
-    { dayOfWeek: 1, timeSlot: 'morning' as const, count: 0 }, // Monday morning
-    { dayOfWeek: 1, timeSlot: 'afternoon' as const, count: 1 }, // Monday evening (1800-2200)
-    { dayOfWeek: 2, timeSlot: 'morning' as const, count: 0 }, // Tuesday morning
-    { dayOfWeek: 2, timeSlot: 'afternoon' as const, count: 0 }, // Tuesday afternoon (no evening shift)
-    { dayOfWeek: 3, timeSlot: 'morning' as const, count: 0 }, // Wednesday morning
-    { dayOfWeek: 3, timeSlot: 'afternoon' as const, count: 0 }, // Wednesday afternoon
-    { dayOfWeek: 4, timeSlot: 'morning' as const, count: 0 }, // Thursday morning
-    { dayOfWeek: 4, timeSlot: 'afternoon' as const, count: 1 }, // Thursday evening (1800-2200)
-    { dayOfWeek: 5, timeSlot: 'morning' as const, count: 0 }, // Friday morning
-    { dayOfWeek: 5, timeSlot: 'afternoon' as const, count: 0 }, // Friday afternoon
+    // Monday to Friday, morning and afternoon support
+    { dayOfWeek: 1, timeSlot: 'morning' as const, count: 1 }, // Monday morning
+    { dayOfWeek: 1, timeSlot: 'afternoon' as const, count: 1 }, // Monday afternoon
+    { dayOfWeek: 2, timeSlot: 'morning' as const, count: 1 }, // Tuesday morning
+    { dayOfWeek: 2, timeSlot: 'afternoon' as const, count: 1 }, // Tuesday afternoon
+    { dayOfWeek: 3, timeSlot: 'morning' as const, count: 1 }, // Wednesday morning
+    { dayOfWeek: 3, timeSlot: 'afternoon' as const, count: 1 }, // Wednesday afternoon
+    { dayOfWeek: 4, timeSlot: 'morning' as const, count: 1 }, // Thursday morning
+    { dayOfWeek: 4, timeSlot: 'afternoon' as const, count: 1 }, // Thursday afternoon
+    { dayOfWeek: 5, timeSlot: 'morning' as const, count: 1 }, // Friday morning
+    { dayOfWeek: 5, timeSlot: 'afternoon' as const, count: 1 }, // Friday afternoon
 ];
 
 interface AppContextType {
