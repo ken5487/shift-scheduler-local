@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Pharmacist, Shift, MonthlySchedule, Leave, SupportNeed, ScheduleIssue } from '@/lib/types';
+import { Pharmacist, Shift, MonthlySchedule, Leave, SupportNeed, ScheduleIssue, ScheduleEvent } from '@/lib/types';
 import dayjs from 'dayjs';
 
 // --- 預設範例資料 ---
@@ -52,6 +52,12 @@ interface AppContextType {
   assignSupport: (date: string, timeSlot: 'morning' | 'afternoon', pharmacistId: string, index: number) => void;
   updateNotes: (date: string, notes: string) => void;
   getScheduleIssues: (month: dayjs.Dayjs) => ScheduleIssue[];
+  events: ScheduleEvent[];
+  addEvent: (event: Omit<ScheduleEvent, 'id'>) => void;
+  updateEvent: (event: ScheduleEvent) => void;
+  deleteEvent: (id: string) => void;
+  assignSaturdaySupport: (date: string, pharmacistId: string) => void;
+  getSaturdaySupport: (date: string) => string | null;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -62,6 +68,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [schedule, setSchedule] = useState<MonthlySchedule>({});
   const [leave, setLeave] = useState<Leave[]>([]);
   const [supportNeeds, setSupportNeeds] = useState<SupportNeed[]>([]);
+  const [events, setEvents] = useState<ScheduleEvent[]>([]);
 
   useEffect(() => {
     try {
@@ -70,6 +77,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       const savedSchedule = localStorage.getItem('schedule');
       const savedLeave = localStorage.getItem('leave');
       const savedSupportNeeds = localStorage.getItem('supportNeeds');
+      const savedEvents = localStorage.getItem('events');
       
       // Clean up old data from localStorage
       localStorage.removeItem('saturdayLeaveLimits');
@@ -87,6 +95,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       setSchedule(savedSchedule ? JSON.parse(savedSchedule) : {});
       setLeave(savedLeave ? JSON.parse(savedLeave) : []);
       setSupportNeeds(savedSupportNeeds ? JSON.parse(savedSupportNeeds) : defaultSupportNeeds);
+      setEvents(savedEvents ? JSON.parse(savedEvents) : []);
     } catch (error) {
       console.error("Failed to load data from localStorage", error);
       setPharmacists(defaultPharmacists);
@@ -94,6 +103,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       setSchedule({});
       setLeave([]);
       setSupportNeeds(defaultSupportNeeds);
+      setEvents([]);
     }
   }, []);
 
@@ -104,10 +114,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         localStorage.setItem('schedule', JSON.stringify(schedule));
         localStorage.setItem('leave', JSON.stringify(leave));
         localStorage.setItem('supportNeeds', JSON.stringify(supportNeeds));
+        localStorage.setItem('events', JSON.stringify(events));
     } catch (error) {
         console.error("Failed to save data to localStorage", error);
     }
-  }, [pharmacists, shifts, schedule, leave, supportNeeds]);
+  }, [pharmacists, shifts, schedule, leave, supportNeeds, events]);
 
   const addPharmacist = (pharmacist: Omit<Pharmacist, 'id'>) => {
     setPharmacists([...pharmacists, { ...pharmacist, id: uuidv4() }]);
@@ -319,6 +330,49 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     return leave.some(l => l.pharmacistId === pharmacistId && l.date === date);
   };
 
+  const addEvent = (event: Omit<ScheduleEvent, 'id'>) => {
+    setEvents([...events, { ...event, id: uuidv4() }]);
+  };
+
+  const updateEvent = (updatedEvent: ScheduleEvent) => {
+    setEvents(events.map(e => e.id === updatedEvent.id ? updatedEvent : e));
+  };
+
+  const deleteEvent = (id: string) => {
+    setEvents(events.filter(e => e.id !== id));
+  };
+
+  const assignSaturdaySupport = (date: string, pharmacistId: string) => {
+    setSchedule(prev => {
+      const newSchedule = { ...prev };
+      if (!newSchedule[date]) {
+        newSchedule[date] = { shifts: {} };
+      }
+      if (!newSchedule[date].support) {
+        newSchedule[date].support = {};
+      }
+      if (!newSchedule[date].support!.morning) {
+        newSchedule[date].support!.morning = [];
+      }
+      
+      // 找到第一個空位或創建新位置
+      const existingIndex = newSchedule[date].support!.morning!.findIndex(p => !p);
+      if (existingIndex !== -1) {
+        newSchedule[date].support!.morning![existingIndex] = pharmacistId;
+      } else {
+        newSchedule[date].support!.morning!.push(pharmacistId);
+      }
+      
+      return newSchedule;
+    });
+  };
+
+  const getSaturdaySupport = (date: string): string | null => {
+    const daySchedule = schedule[date];
+    if (!daySchedule?.support?.morning) return null;
+    return daySchedule.support.morning.find(p => p) || null;
+  };
+
   return (
     <AppContext.Provider value={{ 
       pharmacists, addPharmacist, updatePharmacist, deletePharmacist,
@@ -326,7 +380,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       schedule, setSchedule, assignShift,
       leave, addLeave, deleteLeave, isPharmacistOnLeave,
       supportNeeds, updateSupportNeed, assignSupport,
-      updateNotes, getScheduleIssues
+      updateNotes, getScheduleIssues,
+      events, addEvent, updateEvent, deleteEvent,
+      assignSaturdaySupport, getSaturdaySupport
     }}>
       {children}
     </AppContext.Provider>

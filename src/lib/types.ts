@@ -2,7 +2,7 @@
 export interface Pharmacist {
   id: string;
   name: string;
-  position: '正職' | '兼職';
+  position: '正職' | '兼職' | 'OPD支援';
 }
 
 export interface Shift {
@@ -44,4 +44,11 @@ export interface ScheduleIssue {
   type: 'understaffed' | 'conflict' | 'no_assignment';
   description: string;
   severity: 'high' | 'medium' | 'low';
+}
+
+export interface ScheduleEvent {
+  id: string;
+  name: string;
+  date: string; // YYYY-MM-DD
+  color: string;
 }

@@ -15,7 +15,7 @@ const Staff = () => {
   const { pharmacists, addPharmacist, updatePharmacist, deletePharmacist } = useAppContext();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [currentPharmacist, setCurrentPharmacist] = useState<Pharmacist | null>(null);
-  const [formData, setFormData] = useState({ name: '', position: '正職' as '正職' | '兼職' });
+  const [formData, setFormData] = useState({ name: '', position: '正職' as '正職' | '兼職' | 'OPD支援' });
 
   const openDialog = (pharmacist: Pharmacist | null = null) => {
     setCurrentPharmacist(pharmacist);
@@ -84,13 +84,14 @@ const Staff = () => {
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="position" className="text-right">職位</Label>
-              <Select value={formData.position} onValueChange={(value: '正職' | '兼職') => setFormData({...formData, position: value})}>
+              <Select value={formData.position} onValueChange={(value: '正職' | '兼職' | 'OPD支援') => setFormData({...formData, position: value})}>
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="選擇職位" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="正職">正職</SelectItem>
                   <SelectItem value="兼職">兼職</SelectItem>
+                  <SelectItem value="OPD支援">OPD支援</SelectItem>
                 </SelectContent>
               </Select>
             </div>

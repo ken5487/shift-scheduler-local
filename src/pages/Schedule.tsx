@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils';
 import { Pharmacist } from '@/lib/types';
 import { Textarea } from '@/components/ui/textarea';
+import EventsManager from '@/components/EventsManager';
 
 dayjs.locale('zh-tw');
 
@@ -19,6 +20,12 @@ const TIME_SLOTS = [
   { name: '早班', start: '08:30', end: '12:00' },
   { name: '午班', start: '13:00', end: '17:30' },
   { name: '晚班', start: '18:00', end: '22:00' },
+];
+
+const SATURDAY_SHIFTS = [
+  { name: '早班1', start: '08:30', end: '12:30', type: 'morning' },
+  { name: '早班2', start: '08:30', end: '12:30', type: 'morning' },
+  { name: '早班3', start: '09:00', end: '13:00', type: 'afternoon' },
 ];
 
 const doTimesOverlap = (shift: Shift, slot: { start: string; end: string }) => {
@@ -39,7 +46,11 @@ const doTimesOverlap = (shift: Shift, slot: { start: string; end: string }) => {
 
 
 const Schedule = () => {
-  const { shifts, pharmacists, schedule, assignShift, isPharmacistOnLeave, supportNeeds, assignSupport, updateNotes } = useAppContext();
+  const { 
+    shifts, pharmacists, schedule, assignShift, isPharmacistOnLeave, 
+    supportNeeds, assignSupport, updateNotes, events, updateEvent,
+    assignSaturdaySupport, getSaturdaySupport
+  } = useAppContext();
   const [currentDate, setCurrentDate] = useState(dayjs());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<dayjs.Dayjs | null>(null);
@@ -49,6 +60,7 @@ const Schedule = () => {
   const [isNotesDialogOpen, setIsNotesDialogOpen] = useState(false);
   const [selectedDayForNotes, setSelectedDayForNotes] = useState<dayjs.Dayjs | null>(null);
   const [notesText, setNotesText] = useState('');
+  const [showEventsManager, setShowEventsManager] = useState(false);
 
   const startOfMonth = currentDate.startOf('month');
   const endOfMonth = currentDate.endOf('month');
@@ -89,6 +101,23 @@ const Schedule = () => {
       updateNotes(dateStr, notesText);
       setIsNotesDialogOpen(false);
     }
+  };
+
+  const handleEventDrop = (eventId: string, targetDate: string) => {
+    const event = events.find(e => e.id === eventId);
+    if (event) {
+      updateEvent({ ...event, date: targetDate });
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent, targetDate: string) => {
+    e.preventDefault();
+    const eventId = e.dataTransfer.getData('text/plain');
+    handleEventDrop(eventId, targetDate);
   };
   
   const shiftsForSelectedSlot = selectedSlot ? getShiftsForSlot(selectedSlot) : [];
@@ -330,6 +359,9 @@ const Schedule = () => {
                 <Download />
                 匯出 HTML
             </Button>
+            <Button variant="outline" onClick={() => setShowEventsManager(!showEventsManager)}>
+                {showEventsManager ? '隱藏' : '顯示'}事件管理
+            </Button>
         </div>
       </div>
 
@@ -411,12 +443,32 @@ const Schedule = () => {
                 
                 return (
                   <TableRow key={dateStr} className={cn(isSunday && "bg-muted/50")}>
-                    <TableCell className="font-medium align-top">
+                    <TableCell 
+                      className="font-medium align-top"
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, dateStr)}
+                    >
                       <div className="flex flex-col">
                         <span className={cn(isSaturday && "text-blue-600 font-bold", isSunday && "text-red-600 font-bold")}>
                           {day.format('MM/DD')} ({day.format('ddd')})
                         </span>
                         {scheduleWarnings}
+                        
+                        {/* 顯示當日事件 */}
+                        <div className="mt-1 space-y-1">
+                          {events
+                            .filter(event => event.date === dateStr)
+                            .map(event => (
+                              <div 
+                                key={event.id} 
+                                className="text-xs px-2 py-0.5 rounded-full w-fit text-white font-medium"
+                                style={{ backgroundColor: event.color }}
+                              >
+                                {event.name}
+                              </div>
+                            ))}
+                        </div>
+                        
                         <div className="mt-1 space-y-1">
                           {pharmacistsOnLeaveToday.map(p => (
                             <div key={p.id} className="text-xs text-destructive-foreground bg-destructive/80 px-2 py-0.5 rounded-full w-fit">
@@ -436,63 +488,95 @@ const Schedule = () => {
                       <>
                         <TableCell className="align-top p-2">
                           <div className="flex flex-col gap-1 min-h-[60px]">
+                            <div className="text-xs font-semibold text-blue-600 mb-1">
+                              早班1 & 早班2 (08:30-12:30)
+                            </div>
                             {(() => {
                               const workingFullTimers = pharmacists.filter(p => p.position === '正職' && !isPharmacistOnLeave(p.id, dateStr));
-                              const earlySlot = TIME_SLOTS.find(slot => slot.name === '早班');
-                              const morningShifts = earlySlot ? getShiftsForSlot(earlySlot) : [];
-
-                              const assignedPharmacists = morningShifts
-                                .map(shift => {
-                                    const pharmacistId = dailySchedule.shifts[shift.id];
-                                    if (!pharmacistId) return null;
-                                    return pharmacists.find(p => p.id === pharmacistId);
-                                })
-                                .filter((p): p is Pharmacist => !!p);
-                              
-                              const assignedPartTimers = assignedPharmacists.filter(p => p.position === '兼職');
-
-                              // 如果有人休假，顯示空格供輸入支援藥師
-                              const hasLeave = workingFullTimers.length < pharmacists.filter(p => p.position === '正職').length;
+                              const fullTimeCount = pharmacists.filter(p => p.position === '正職').length;
+                              const hasLeave = workingFullTimers.length < fullTimeCount;
+                              const slotsNeeded = 3 - workingFullTimers.length;
                               
                               return (
-                                  <>
-                                      {workingFullTimers.map(p => (
-                                          <div key={p.id} className="text-xs p-1.5 rounded-md bg-background border">
-                                              <span className="font-semibold">{p.name}</span>
-                                              <span className="text-muted-foreground"> (正職)</span>
-                                          </div>
-                                      ))}
-                                      {/* 不顯示兼職人員，如果有人休假則顯示空格 */}
-                                      {hasLeave && (
-                                          <div className="text-xs p-1.5 rounded-md border border-dashed border-muted-foreground bg-muted/50">
-                                              <input 
-                                                  type="text" 
-                                                  placeholder="輸入支援藥師姓名"
-                                                  className="w-full bg-transparent border-none outline-none text-xs"
-                                                  onBlur={(e) => {
-                                                      const dateKey = `${dateStr}_saturday_support`;
-                                                      if (e.target.value.trim()) {
-                                                          localStorage.setItem(dateKey, e.target.value.trim());
-                                                      } else {
-                                                          localStorage.removeItem(dateKey);
-                                                      }
-                                                  }}
-                                                  defaultValue={localStorage.getItem(`${dateStr}_saturday_support`) || ''}
-                                              />
-                                          </div>
-                                      )}
-                                      {workingFullTimers.length === 0 && !hasLeave && (
-                                          <div className="text-xs text-muted-foreground flex items-center justify-center h-full">無人上班</div>
-                                      )}
-                                  </>
+                                <>
+                                  {workingFullTimers.map(p => (
+                                    <div key={p.id} className="text-xs p-1.5 rounded-md bg-background border">
+                                      <span className="font-semibold">{p.name}</span>
+                                      <span className="text-muted-foreground"> (正職)</span>
+                                    </div>
+                                  ))}
+                                  
+                                  {/* 下拉選單填補空缺 */}
+                                  {Array.from({ length: slotsNeeded }, (_, index) => (
+                                    <Select 
+                                      key={`support-${index}`}
+                                      value={dailySchedule.support?.morning?.[index] || ''}
+                                      onValueChange={(value) => {
+                                        if (value === 'unassign') {
+                                          assignSupport(dateStr, 'morning', 'unassign', index);
+                                        } else {
+                                          assignSupport(dateStr, 'morning', value, index);
+                                        }
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs">
+                                        <SelectValue placeholder="選擇支援藥師" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="unassign">清除指派</SelectItem>
+                                        {pharmacists
+                                          .filter(p => 
+                                            p.position === 'OPD支援' || 
+                                            (p.position === '兼職' && !isPharmacistOnLeave(p.id, dateStr))
+                                          )
+                                          .map(p => (
+                                            <SelectItem key={p.id} value={p.id}>
+                                              {p.name} ({p.position})
+                                            </SelectItem>
+                                          ))}
+                                      </SelectContent>
+                                    </Select>
+                                  ))}
+                                </>
                               );
                             })()}
                           </div>
                         </TableCell>
-                        <TableCell colSpan={2} className="align-top p-2 bg-muted/40">
-                            <div className="flex flex-col gap-1 min-h-[60px] items-center justify-center text-muted-foreground text-sm">
-                                無此時段
+                        <TableCell className="align-top p-2">
+                          <div className="flex flex-col gap-1 min-h-[60px]">
+                            <div className="text-xs font-semibold text-green-600 mb-1">
+                              早班3 (09:00-13:00)
                             </div>
+                            <Select
+                              value={dailySchedule.support?.afternoon?.[0] || ''}
+                              onValueChange={(value) => {
+                                if (value === 'unassign') {
+                                  assignSupport(dateStr, 'afternoon', 'unassign', 0);
+                                } else {
+                                  assignSupport(dateStr, 'afternoon', value, 0);
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="選擇藥師" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="unassign">清除指派</SelectItem>
+                                {pharmacists
+                                  .filter(p => !isPharmacistOnLeave(p.id, dateStr))
+                                  .map(p => (
+                                    <SelectItem key={p.id} value={p.id}>
+                                      {p.name} ({p.position})
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </TableCell>
+                        <TableCell className="align-top p-2 bg-muted/40">
+                          <div className="flex flex-col gap-1 min-h-[60px] items-center justify-center text-muted-foreground text-sm">
+                            無此時段
+                          </div>
                         </TableCell>
                       </>
                     ) : (
